@@ -1,0 +1,4305 @@
+--- Project Structure (Filtered: .py, .js) ---
+
+`-- project 2/
+    |-- backend/
+    |   |-- algorithms.py
+    |   |-- auth.py
+    |   |-- create_test_accounts.py
+    |   |-- database.py
+    |   |-- generate_adjacency.py
+    |   |-- main.py
+    |   |-- models.py
+    |   |-- routes.py
+    |   `-- schemas.py
+    |-- cache/
+    |-- frontend/
+    |   |-- public/
+    |   `-- src/
+    |       |-- pages/
+    |       |   |-- AdminDashboard.js
+    |       |   |-- CustomerDashboard.js
+    |       |   |-- ForgotPassword.js
+    |       |   |-- Login.js
+    |       |   |-- Register.js
+    |       |   |-- SalesDashboard.js
+    |       |   `-- UserDashboard.js
+    |       |-- styles/
+    |       |-- App.js
+    |       |-- App.test.js
+    |       |-- api.js
+    |       |-- index.js
+    |       |-- reportWebVitals.js
+    |       `-- setupTests.js
+    |-- QUICK_START.py
+    |-- create_hanoi_districts.py
+    |-- debug_zones.py
+    |-- import_osmnx_zones.py
+    |-- query_db.py
+    `-- test.py
+
+--- File Contents ---
+
+---
+File: D:/project 2\create_hanoi_districts.py
+---
+import requests
+
+API_BASE = "http://localhost:8000"
+
+# List of Hanoi districts to create
+HANOI_DISTRICTS = [
+    {"code": "HB", "name": "Quận Hoàn Bà Đình", "center_lat": 21.0285, "center_lng": 105.8581},
+    {"code": "TCH", "name": "Quận Thanh Chương", "center_lat": 21.0045, "center_lng": 105.8645},
+    {"code": "DC", "name": "Quận Đống Đa", "center_lat": 21.0262, "center_lng": 105.8449},
+    {"code": "HAD", "name": "Quận Hai Bà Trưng", "center_lat": 20.9992, "center_lng": 105.8527},
+    {"code": "HA", "name": "Quận Hoàn Kiếm", "center_lat": 21.0285, "center_lng": 105.8493},
+    {"code": "CGV", "name": "Quận Cầu Giấy", "center_lat": 21.0410, "center_lng": 105.7880},
+    {"code": "BTL", "name": "Quận Bắc Từ Liêm", "center_lat": 21.0887, "center_lng": 105.7704},
+    {"code": "TL", "name": "Quận Tây Hồ", "center_lat": 21.0901, "center_lng": 105.8243},
+]
+
+print("🔍 Creating Hanoi districts...\n")
+
+for district in HANOI_DISTRICTS:
+    try:
+        res = requests.post(
+            f"{API_BASE}/districts",
+            json=district,
+            headers={"Authorization": f"Bearer YOUR_ADMIN_TOKEN"}  # If auth is required
+        )
+        if res.status_code in [200, 201]:
+            print(f"✅ Created: {district['name']} (Code: {district['code']})")
+        else:
+            print(f"⚠️  {district['name']}: {res.status_code} - {res.text}")
+    except Exception as e:
+        print(f"❌ Error creating {district['name']}: {e}")
+
+print("\n✅ Districts creation complete!")
+
+---
+File: D:/project 2\debug_zones.py
+---
+import sys
+import os
+import requests
+import json
+
+# Add backend to path for runtime
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
+
+# For Pylance: use proper imports
+if os.path.exists(os.path.join(os.path.dirname(__file__), 'backend')):
+    from database import SessionLocal  # type: ignore
+    from models import Zone, District  # type: ignore
+else:
+    # Fallback for different execution contexts
+    from backend.database import SessionLocal
+    from backend.models import Zone, District
+
+# Get zones from API
+print("=" * 60)
+print("ZONES FROM API")
+print("=" * 60)
+
+API_BASE = "http://localhost:8000"
+
+try:
+    res = requests.get(f"{API_BASE}/zones")
+    if res.status_code == 200:
+        zones = res.json()
+        print(f"Total zones from API: {len(zones)}")
+        for zone in zones:
+            print(f"\n📍 Zone: {zone.get('name')} (ID: {zone.get('id')})")
+            print(f"   Code: {zone.get('zone_code')}")
+            print(f"   Center: ({zone.get('center_lat')}, {zone.get('center_lng')})")
+            geometry = zone.get('geometry')
+            if geometry:
+                print(f"   ✅ Geometry Type: {geometry.get('type')}")
+                if geometry.get('type') == 'Polygon':
+                    coords = geometry.get('coordinates', [])
+                    print(f"      Polygon Coords Count: {len(coords[0]) if coords else 0}")
+                elif geometry.get('type') == 'MultiPolygon':
+                    coords = geometry.get('coordinates', [])
+                    print(f"      MultiPolygon Parts: {len(coords)}")
+            else:
+                print("   ❌ NO GEOMETRY!")
+    else:
+        print(f"Error: {res.status_code} - {res.text}")
+except Exception as e:
+    print(f"Error connecting to API: {e}")
+
+# Check database directly
+print("\n" + "=" * 60)
+print("ALL DISTRICTS IN DATABASE")
+print("=" * 60)
+
+db = SessionLocal()
+try:
+    districts = db.query(District).all()
+    print(f"\nTotal districts: {len(districts)}")
+    for district in districts:
+        print(f"  - ID: {district.id}, Code: {district.code}, Name: {district.name}")
+except Exception as e:
+    print(f"Database error: {e}")
+finally:
+    db.close()
+
+# Check first district
+print("\n" + "=" * 60)
+print("ZONES IN DATABASE (first district)")
+print("=" * 60)
+
+db = SessionLocal()
+try:
+    district = db.query(District).first()
+    if district:
+        zones = db.query(Zone).filter(Zone.district_id == district.id).all()
+        print(f"\nDistrict: {district.name} (Code: {district.code}, ID: {district.id})")
+        print(f"Zones count: {len(zones)}")
+        for zone in zones:
+            print(f"\n📍 Zone: {zone.name} (ID: {zone.id})")
+            print(f"   Code: {zone.zone_code}")
+            print(f"   Center: ({zone.center_lat}, {zone.center_lng})")
+            if zone.geometry:
+                print(f"   ✅ Geometry Type: {zone.geometry.get('type')}")
+                print(f"   Geometry Size: {len(json.dumps(zone.geometry))} bytes")
+                if zone.geometry.get('type') == 'Polygon':
+                    coords = zone.geometry.get('coordinates', [])
+                    print(f"      Polygon Coordinates Count: {len(coords[0]) if coords else 0}")
+                elif zone.geometry.get('type') == 'MultiPolygon':
+                    coords = zone.geometry.get('coordinates', [])
+                    print(f"      MultiPolygon Parts: {len(coords)}")
+            else:
+                print("   ❌ NO GEOMETRY IN DATABASE!")
+    else:
+        print("No districts found")
+except Exception as e:
+    print(f"Database error: {e}")
+finally:
+    db.close()
+
+---
+File: D:/project 2\import_osmnx_zones.py
+---
+import osmnx as ox
+import requests
+import random
+from shapely.geometry import mapping
+
+API_BASE = "http://localhost:8000"
+
+def get_district_id_by_code(district_code):
+    try:
+        res = requests.get(f"{API_BASE}/districts")
+        if res.status_code == 200:
+            for d in res.json():
+                if d['code'] == district_code:
+                    return d['id']
+    except Exception as e:
+        print(f"❌ Lỗi kết nối Backend: {e}")
+    return None
+
+def import_zones_with_osmnx(district_code, place_name):
+    district_id = get_district_id_by_code(district_code)
+    if not district_id:
+        print(f"❌ Không tìm thấy District ID cho mã: {district_code}. Vui lòng tạo District trước.")
+        return
+
+    print(f"⏳ Đang tải dữ liệu từ OpenStreetMap cho: {place_name}...")
+    
+    # 1. Lấy dữ liệu bằng OSMnx
+    tags = {"boundary": "administrative", "admin_level": "8"}
+    gdf = ox.features_from_place(place_name, tags)
+    
+    # Lọc chỉ lấy Polygon và MultiPolygon
+    gdf = gdf[gdf.geometry.type.isin(["Polygon", "MultiPolygon"])]
+
+    success_count = 0
+    for _, row in gdf.iterrows():
+        ward_name = row.get('name', 'Không tên')
+        
+        # 2. Xử lý Geometry sang định dạng GeoJSON mà Leaflet hiểu được
+        # mapping(row.geometry) chuyển đổi shapely object sang dict GeoJSON
+        geojson_geometry = mapping(row.geometry)
+        
+        # 3. Tính toán tâm (Centroid) để hiển thị Marker hoặc tính khoảng cách
+        centroid = row.geometry.centroid
+        lat, lng = centroid.y, centroid.x
+
+        # 4. Chuẩn bị Payload cho API
+        payload = {
+            "zone_code": f"W-{random.randint(10000, 99999)}",
+            "district_id": district_id,
+            "name": ward_name,
+            "geometry": geojson_geometry, 
+            "center_lat": lat,
+            "center_lng": lng,
+            "num_customers": random.randint(100, 1000),
+            "num_orders": random.randint(200, 2000),
+            "revenue": random.randint(50, 500) * 1000000
+        }
+
+        # 5. Gửi dữ liệu lên Backend
+        try:
+            res = requests.post(f"{API_BASE}/zones", json=payload)
+            if res.status_code == 200:
+                print(f" ✅ Đã import: {ward_name}")
+                success_count += 1
+            else:
+                print(f" ❌ Lỗi khi lưu {ward_name}: {res.text}")
+        except Exception as e:
+            print(f" ❌ Lỗi kết nối khi xử lý {ward_name}: {e}")
+
+    print(f"\n🎉 HOÀN TẤT! Đã import {success_count} phường vào hệ thống.")
+
+if __name__ == "__main__":
+    # Đảm bảo bạn đã tạo District "BD" trong Admin Dashboard trước khi chạy
+    import_zones_with_osmnx("BD", "Quận Ba Đình, Hà Nội, Vietnam")
+---
+File: D:/project 2\query_db.py
+---
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
+
+from database import SessionLocal
+from models import District, Zone
+
+db = SessionLocal()
+
+districts = db.query(District).all()
+print(f"Total Districts: {len(districts)}")
+for d in districts:
+    print(f"  - ID: {d.id}, Code: {d.code}, Name: {d.name}")
+
+zones = db.query(Zone).all()
+print(f"\nTotal Zones: {len(zones)}")
+for z in zones:
+    has_geom = "✅" if z.geometry else "❌"
+    print(f"  - ID: {z.id}, Name: {z.name}, district_id: {z.district_id}, Geom: {has_geom}")
+
+db.close()
+
+---
+File: D:/project 2\QUICK_START.py
+---
+#!/usr/bin/env python3
+"""
+Quick Start Guide - Commercial Territory Design System
+Hướng dẫn bắt đầu nhanh chóng
+"""
+
+import os
+import sys
+
+def print_header(text):
+    print("\n" + "="*60)
+    print(f"  {text}")
+    print("="*60 + "\n")
+
+def print_section(text):
+    print(f"\n📌 {text}")
+    print("-" * 60)
+
+def main():
+    print_header("🎯 COMMERCIAL TERRITORY DESIGN SYSTEM")
+    
+    print("""
+    Hệ thống quản lý và tối ưu hóa phân vùng bán hàng dựa trên:
+    ✓ K-Means Clustering (vị trí địa lý)
+    ✓ Greedy Seed Growth (cân bằng tải)
+    ✓ Local Search (tối ưu hóa)
+    """)
+
+    # Step 1: Setup Backend
+    print_section("Bước 1: CẤU HÌNH BACKEND")
+    print("""
+    1.1 Cài đặt dependencies:
+        $ cd backend
+        $ pip install fastapi sqlalchemy sqlalchemy-utils python-jose passlib bcrypt
+        
+    1.2 Kiểm tra MySQL/Database:
+        - Đảm bảo MySQL đang chạy
+        - Tạo database (nếu cần)
+        
+    1.3 Chạy backend server:
+        $ cd backend
+        $ python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+        
+        ✓ Server sẽ chạy tại http://localhost:8000
+        ✓ API docs: http://localhost:8000/docs
+    """)
+
+    # Step 2: Setup Frontend
+    print_section("Bước 2: CẤU HÌNH FRONTEND")
+    print("""
+    2.1 Cài đặt Node.js dependencies:
+        $ cd frontend
+        $ npm install
+        
+    2.2 Chạy frontend development server:
+        $ npm start
+        
+        ✓ App sẽ chạy tại http://localhost:3000
+        ✓ Tự động reload khi có thay đổi
+    """)
+
+    # Step 3: Test
+    print_section("Bước 3: KIỂM TRA HỆ THỐNG")
+    print("""
+    3.1 Đăng nhập:
+        - Vào http://localhost:3000
+        - Đăng ký tài khoản mới hoặc dùng tài khoản test
+        
+    3.2 Quyền truy cập:
+        - admin   → /admin    → Dashboard quản lý
+        - sales   → /sales    → Xem phân vùng được giao
+        - customer → /customer → Thông tin khách hàng
+    """)
+
+    # Step 4: Test Data
+    print_section("Bước 4: TẠO DỮ LIỆU TEST")
+    print("""
+    4.1 Admin: Tạo District
+        - Vào Admin Dashboard
+        - Sidebar → Thêm Quận
+        - Nhập thông tin: Mã, Tên, Tọa độ
+        
+    4.2 Admin: Tạo Zones
+        - Chọn District
+        - Tab "Quản Lý Zones" → Thêm Zone
+        - Nhập: Mã, Tên, Tọa độ (lat, lng)
+        - Nhập: Số khách hàng, đơn hàng, doanh thu
+        
+    4.3 Admin: Cập nhật Activity
+        - Chọn Zone → Cập Nhật
+        - Nhập thông tin hoạt động
+        
+    4.4 Admin: Chạy Thuật Toán
+        - Tab "Thuật Toán"
+        - Chọn thuật toán
+        - Nhập số phân vùng
+        - Xem kết quả
+    """)
+
+    # Key Features
+    print_section("🌟 CÁC TÍNH NĂNG CHÍNH")
+    print("""
+    ADMIN:
+    ✓ Quản lý districts (quận/huyện)
+    ✓ Quản lý zones (đơn vị cơ bản)
+    ✓ Nhập thông tin activity cho zones
+    ✓ Chạy 3 thuật toán chia phân vùng
+    ✓ Gán phân vùng cho sales person
+    ✓ Xem thống kê hệ thống
+    
+    SALES:
+    ✓ Xem phân vùng được giao
+    ✓ Xem thông tin zones trong phân vùng
+    ✓ Xem thống kê doanh số
+    ✓ Biểu đồ phân bố khách hàng
+    
+    CUSTOMER:
+    ✓ Xem thông tin cá nhân
+    ✓ Xem sales person phụ trách (tương lai)
+    ✓ Xem lịch sử đơn hàng (tương lai)
+    """)
+
+    # API Tests
+    print_section("🔧 TEST API")
+    print("""
+    Dùng Postman hoặc curl để test:
+    
+    1. Đăng ký:
+       POST /register
+       {
+         "username": "admin1",
+         "email": "admin@example.com",
+         "password": "Admin123!",
+         "role": "admin",
+         "full_name": "Admin User",
+         "phone": "0123456789"
+       }
+    
+    2. Đăng nhập:
+       POST /login
+       {
+         "username": "admin1",
+         "password": "Admin123!"
+       }
+    
+    3. Tạo District:
+       POST /districts
+       {
+         "code": "HN001",
+         "name": "Hà Nội",
+         "center_lat": 21.0285,
+         "center_lng": 105.8542
+       }
+    
+    4. Tạo Zone:
+       POST /zones
+       {
+         "zone_code": "Z001",
+         "district_id": 1,
+         "name": "Zone 1",
+         "center_lat": 21.03,
+         "center_lng": 105.85,
+         "num_customers": 50,
+         "num_orders": 100,
+         "revenue": 5000000
+       }
+    
+    5. Chạy K-Means:
+       POST /algorithms/kmeans
+       {
+         "district_id": 1,
+         "num_clusters": 3,
+         "max_iterations": 100
+       }
+    """)
+
+    # Troubleshooting
+    print_section("⚠️  KHẮC PHỤC SỰ CỐ")
+    print("""
+    Backend không kết nối:
+    - Kiểm tra port 8000 có bị chiếm không
+    - Kiểm tra CORS configuration trong main.py
+    - Xem logs: python -m uvicorn main:app --reload --log-level debug
+    
+    Database errors:
+    - Kiểm tra MySQL running
+    - Kiểm tra database.py connection string
+    - Chạy: alembic upgrade head (nếu có migrations)
+    
+    Frontend không load:
+    - Xóa node_modules: rm -rf node_modules
+    - Reinstall: npm install
+    - Xóa cache: npm cache clean --force
+    - Chạy lại: npm start
+    
+    API 404 errors:
+    - Kiểm tra API endpoint URL
+    - Kiểm tra route definition trong routes.py
+    - Kiểm tra API_BASE trong file JavaScript (phải là http://localhost:8000)
+    """)
+
+    # Performance Tips
+    print_section("⚡ TỐI ƯU HIỆU NĂNG")
+    print("""
+    1. Database:
+       - Tạo indexes cho fields hay query
+       - Optimize queries n+1
+       - Pagination cho large datasets
+    
+    2. Frontend:
+       - Code splitting
+       - Lazy loading
+       - Memoization cho components
+    
+    3. Algorithms:
+       - Adjust max_iterations
+       - Optimize distance calculations
+       - Cache results
+    
+    4. Deployment:
+       - Use production ASGI server (gunicorn)
+       - Enable gzip compression
+       - Cache responses
+       - CDN for static assets
+    """)
+
+    # Next Steps
+    print_section("📚 BƯỚC TIẾP THEO")
+    print("""
+    Tích hợp Map:
+    1. Install leaflet hoặc Google Maps API
+    2. Tạo component để vẽ zones
+    3. Thêm drag-and-drop để điều chỉnh
+    
+    Cải Thiện Thuật Toán:
+    1. Thêm constraints (max distance, max zones)
+    2. Implement Genetic Algorithm
+    3. Add visualizations cho kết quả
+    
+    DevOps:
+    1. Dockerize application
+    2. Setup CI/CD pipeline
+    3. Deploy lên cloud (AWS, Azure, GCP)
+    """)
+
+    # Support
+    print_section("💬 HỖ TRỢ VÀ TÀI LIỆU")
+    print("""
+    - README_TERRITORY_DESIGN.md - Tài liệu chi tiết
+    - backend/algorithms.py - Chi tiết thuật toán
+    - API Documentation: http://localhost:8000/docs
+    - Frontend Components: src/pages/
+    """)
+
+    print_header("✅ SẴN SÀNG BẮT ĐẦU!")
+    print("""
+    Chúc bạn thành công! 🚀
+    
+    Nếu có vấn đề:
+    1. Kiểm tra logs
+    2. Đọc README_TERRITORY_DESIGN.md
+    3. Test API endpoints bằng Postman
+    4. Kiểm tra network tab trong DevTools
+    """)
+
+if __name__ == "__main__":
+    main()
+
+---
+File: D:/project 2\test.py
+---
+import tk as tk
+from tkinter import filedialog, messagebox, ttk
+import os
+import codecs
+ 
+# --- Configuration ---
+IGNORE_LIST = [
+    '.git', '.svn', '.idea', '.vscode', '__pycache__', 'node_modules',
+    'vendor', 'target', 'build', 'dist', 'out', 'logs', 'temp',
+    '.DS_Store', 'Thumbs.db', '*.pyc', '*.log', '*.tmp'
+]
+ 
+# THÊM: Danh sách các đuôi file cho phép đọc
+ALLOWED_EXTENSIONS = ['.py', '.js']
+ 
+MAX_TEXT_FILE_SIZE = 500 * 1024 # 500 KB
+ 
+def is_ignored(path, ignore_list):
+    path_parts = path.split(os.sep)
+    for part in path_parts:
+        if part in ignore_list:
+            return True
+        for pattern in ignore_list:
+            if '*' in pattern:
+                if partmatch_pattern(part, pattern):
+                    return True
+    return False
+ 
+def partmatch_pattern(name, pattern):
+    if pattern.startswith('*.'):
+        return name.endswith(pattern[1:])
+    if pattern.endswith('*'):
+        return name.startswith(pattern[:-1])
+    return name == pattern
+ 
+def build_structure_string(directory, ignore_list, indent="", is_last=True):
+    structure = []
+    base_name = os.path.basename(directory) if directory not in ['.', '', os.sep] else os.path.basename(os.path.abspath(directory))
+    if not base_name:
+         base_name = os.path.abspath(directory)
+ 
+    structure.append(indent + ("`-- " if is_last else "|-- ") + base_name + "/")
+ 
+    try:
+        items = os.listdir(directory)
+        filtered_items = [item for item in sorted(items) if not is_ignored(os.path.join(directory, item), ignore_list)]
+        # CHỈNH SỬA: Lọc thư mục và CHỈ lấy file .py, .js
+        dirs = sorted([d for d in filtered_items if os.path.isdir(os.path.join(directory, d))])
+        files = sorted([f for f in filtered_items if os.path.isfile(os.path.join(directory, f)) 
+                        and any(f.endswith(ext) for ext in ALLOWED_EXTENSIONS)])
+        sorted_filtered_items = dirs + files
+    except Exception:
+        return "\n".join(structure)
+ 
+    num_filtered_items = len(sorted_filtered_items)
+    for i, item in enumerate(sorted_filtered_items):
+        path = os.path.join(directory, item)
+        is_last_item_filtered = (i == num_filtered_items - 1)
+        new_indent = indent + ("    " if is_last else "|   ")
+ 
+        if os.path.isdir(path):
+            # Nếu là thư mục, đệ quy tiếp
+            subtree = build_structure_string(path, ignore_list, new_indent, is_last_item_filtered)
+            # Chỉ thêm thư mục vào nếu nó không rỗng (có chứa file py/js bên trong) hoặc tùy chọn hiển thị hết
+            structure.append(subtree)
+        else:
+             structure.append(new_indent + ("`-- " if is_last_item_filtered else "|-- ") + item)
+ 
+    return "\n".join(structure)
+ 
+def get_file_content_string(directory, ignore_list, max_size):
+    content_string = []
+    for dirpath, dirnames, filenames in os.walk(directory, topdown=True):
+        dirnames[:] = [d for d in dirnames if not is_ignored(os.path.join(dirpath, d), ignore_list)]
+ 
+        for filename in filenames:
+            filepath = os.path.join(dirpath, filename)
+            # CHỈNH SỬA: Kiểm tra nếu file KHÔNG thuộc danh sách cho phép thì bỏ qua
+            if not any(filename.endswith(ext) for ext in ALLOWED_EXTENSIONS):
+                continue
+            if is_ignored(filepath, ignore_list):
+                continue
+ 
+            content_string.append(f"\n---\nFile: {filepath}\n---\n")
+ 
+            try:
+                file_size = os.path.getsize(filepath)
+                if file_size > max_size:
+                     content_string.append(f"[File too large - Content Skipped]\n")
+                     continue
+ 
+                with codecs.open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                     content_string.append(f.read())
+            except Exception as e:
+                content_string.append(f"[Error reading file: {e}]\n")
+ 
+    return "".join(content_string)
+ 
+# --- Các hàm GUI giữ nguyên logic, chỉ gọi các hàm core đã sửa ở trên ---
+ 
+def generate_project_info(project_dir, output_filename, ignore_list=None, max_size=MAX_TEXT_FILE_SIZE):
+    if ignore_list is None:
+        ignore_list = IGNORE_LIST
+ 
+    if not project_dir or not os.path.exists(project_dir):
+        return "Error: Invalid directory."
+ 
+    output_content = f"--- Project Structure (Filtered: {', '.join(ALLOWED_EXTENSIONS)}) ---\n\n"
+    # Build structure
+    output_content += build_structure_string(project_dir, ignore_list)
+    output_content += "\n\n--- File Contents ---\n"
+    output_content += get_file_content_string(project_dir, ignore_list, max_size)
+ 
+    try:
+        with open(output_filename, 'w', encoding='utf-8') as f:
+            f.write(output_content)
+        return f"Successfully generated '{output_filename}'"
+    except Exception as e:
+        return f"Error: {e}"
+ 
+class ProjectInfoGeneratorApp:
+    def __init__(self, root):
+        self.root = root
+        root.title("Py & Js Code Reader")
+        root.geometry("600x350")
+ 
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
+ 
+        # Input
+        self.frame_input = ttk.Frame(root, padding="10")
+        self.frame_input.pack(fill=tk.X)
+        ttk.Label(self.frame_input, text="Project Directory:").pack(side=tk.LEFT)
+        self.entry_input = ttk.Entry(self.frame_input, width=40)
+        self.entry_input.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
+        ttk.Button(self.frame_input, text="Browse", command=self.browse_input_directory).pack(side=tk.LEFT)
+ 
+        # Output
+        self.frame_output = ttk.Frame(root, padding="10")
+        self.frame_output.pack(fill=tk.X)
+        ttk.Label(self.frame_output, text="Output File:").pack(side=tk.LEFT)
+        self.entry_output = ttk.Entry(self.frame_output, width=40)
+        self.entry_output.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
+        ttk.Button(self.frame_output, text="Save As", command=self.browse_output_file).pack(side=tk.LEFT)
+ 
+        # Generate
+        self.button_generate = ttk.Button(root, text="Generate Project Info", command=self.start_processing)
+        self.button_generate.pack(pady=20)
+ 
+        # Status
+        self.label_status = ttk.Label(root, text="Ready", foreground="blue")
+        self.label_status.pack()
+ 
+    def browse_input_directory(self):
+        path = filedialog.askdirectory()
+        if path:
+            self.entry_input.delete(0, tk.END)
+            self.entry_input.insert(0, path)
+            if not self.entry_output.get():
+                self.entry_output.insert(0, os.path.join(os.getcwd(), "project_code.txt"))
+ 
+    def browse_output_file(self):
+        path = filedialog.asksaveasfilename(defaultextension=".txt")
+        if path:
+            self.entry_output.delete(0, tk.END)
+            self.entry_output.insert(0, path)
+ 
+    def start_processing(self):
+        project_dir = self.entry_input.get()
+        output_file = self.entry_output.get()
+        self.label_status.config(text="Processing...")
+        self.root.update_idletasks()
+        result = generate_project_info(project_dir, output_file)
+        self.label_status.config(text=result)
+        messagebox.showinfo("Result", result)
+ 
+if __name__ == "__main__":
+    import tkinter as tk
+    root = tk.Tk()
+    app = ProjectInfoGeneratorApp(root)
+    root.mainloop()
+---
+File: D:/project 2\backend\algorithms.py
+---
+"""
+Commercial Territory Design Algorithms
+- K-means Clustering: Dựa trên vị trí địa lý
+- Greedy Seed Growth: Cân bằng tải
+- Local Search: Điều chỉnh tối ưu
+"""
+
+import math
+import random
+from typing import List, Dict, Tuple, Set
+from dataclasses import dataclass
+from collections import defaultdict
+import time
+
+@dataclass
+class Zone:
+    id: int
+    code: str
+    lat: float
+    lng: float
+    num_customers: int = 0
+    num_orders: int = 0
+    revenue: float = 0.0
+    workload: float = 0.0  # Điểm tải trong thuật toán
+
+
+class TerritoryAlgorithm:
+    """Base class cho các thuật toán chia phân vùng"""
+    
+    def __init__(self, zones: List[Dict], distances: Dict[int, Dict[int, float]]):
+        """
+        Args:
+            zones: List các zone với {id, code, lat, lng, num_customers, num_orders, revenue}
+            distances: Dict {zone_id1: {zone_id2: distance}}
+        """
+        self.zones = [
+            Zone(
+                id=z['id'],
+                code=z['code'],
+                lat=z['lat'],
+                lng=z['lng'],
+                num_customers=z.get('num_customers', 0),
+                num_orders=z.get('num_orders', 0),
+                revenue=z.get('revenue', 0.0)
+            )
+            for z in zones
+        ]
+        self.distances = distances
+        self.zone_map = {z.id: z for z in self.zones}
+        self.territories = {}
+        self.execution_time = 0
+        self.quality_score = 0
+        
+    def _calculate_workload(self, zone: Zone) -> float:
+        """Tính điểm tải cho một zone (kết hợp số lượng và vị trí)"""
+        # Công thức: workload = customers * 0.4 + orders * 0.3 + revenue/100000 * 0.3
+        return (zone.num_customers * 0.4 + 
+                zone.num_orders * 0.3 + 
+                (zone.revenue / 100000) * 0.3)
+    
+    def _calculate_distance(self, zone1: Zone, zone2: Zone) -> float:
+        """Tính khoảng cách giữa 2 zones"""
+        if zone1.id in self.distances and zone2.id in self.distances[zone1.id]:
+            return self.distances[zone1.id][zone2.id]
+        # Fallback: tính Haversine distance
+        return self._haversine_distance(
+            zone1.lat, zone1.lng, zone2.lat, zone2.lng
+        )
+    
+    @staticmethod
+    def _haversine_distance(lat1: float, lng1: float, 
+                           lat2: float, lng2: float) -> float:
+        """Tính khoảng cách Haversine (km)"""
+        R = 6371  # Bán kính Trái Đất (km)
+        lat1, lng1, lat2, lng2 = map(math.radians, [lat1, lng1, lat2, lng2])
+        dlat = lat2 - lat1
+        dlng = lng2 - lng1
+        a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlng/2)**2
+        c = 2 * math.asin(math.sqrt(a))
+        return R * c
+    
+    def _evaluate_solution(self) -> Dict:
+        """Đánh giá chất lượng của giải pháp"""
+        metrics = {
+            'balance_score': 0,
+            'contiguity_score': 0,
+            'compactness_score': 0,
+            'overall_score': 0
+        }
+        
+        # 1. Balance score: Cân bằng tải giữa các phân vùng
+        workloads = []
+        for territory_zones in self.territories.values():
+            total_workload = sum(self._calculate_workload(self.zone_map[zid]) 
+                               for zid in territory_zones)
+            workloads.append(total_workload)
+        
+        if workloads:
+            avg_workload = sum(workloads) / len(workloads)
+            variance = sum((w - avg_workload)**2 for w in workloads) / len(workloads)
+            balance_score = 100 / (1 + math.sqrt(variance))
+            metrics['balance_score'] = min(100, balance_score)
+        
+        # 2. Overall score (trung bình các điểm)
+        metrics['overall_score'] = metrics['balance_score']
+        
+        return metrics
+    
+    def solve(self) -> Dict:
+        """Solve the territory design problem"""
+        raise NotImplementedError
+
+
+class KMeansClustering(TerritoryAlgorithm):
+    """K-means Clustering based on geographical location"""
+    
+    def solve(self, num_clusters: int, max_iterations: int = 100) -> Dict:
+        """
+        K-means clustering dựa trên vị trí địa lý
+        
+        Args:
+            num_clusters: Số phân vùng cần tạo
+            max_iterations: Số lần lặp tối đa
+        """
+        start_time = time.time()
+        self.territories = defaultdict(list)
+        
+        if not self.zones or num_clusters <= 0:
+            return {
+                'territories': {},
+                'algorithm': 'kmeans',
+                'execution_time': 0,
+                'quality_score': 0,
+                'message': 'Invalid input'
+            }
+        
+        # Khởi tạo centroids ngẫu nhiên
+        centroids = {}
+        initial_zones = random.sample(self.zones, min(num_clusters, len(self.zones)))
+        for i, zone in enumerate(initial_zones):
+            centroids[i] = (zone.lat, zone.lng)
+        
+        num_clusters = len(initial_zones)
+        
+        # K-means iterations
+        for iteration in range(max_iterations):
+            old_centroids = centroids.copy()
+            new_territories = defaultdict(list)
+            
+            # Assign zones to nearest centroid
+            for zone in self.zones:
+                min_distance = float('inf')
+                nearest_cluster = 0
+                
+                for cluster_id, (c_lat, c_lng) in centroids.items():
+                    distance = self._haversine_distance(
+                        zone.lat, zone.lng, c_lat, c_lng
+                    )
+                    if distance < min_distance:
+                        min_distance = distance
+                        nearest_cluster = cluster_id
+                
+                new_territories[nearest_cluster].append(zone.id)
+            
+            # Update centroids
+            for cluster_id, zone_ids in new_territories.items():
+                if zone_ids:
+                    avg_lat = sum(self.zone_map[zid].lat for zid in zone_ids) / len(zone_ids)
+                    avg_lng = sum(self.zone_map[zid].lng for zid in zone_ids) / len(zone_ids)
+                    centroids[cluster_id] = (avg_lat, avg_lng)
+            
+            self.territories = new_territories
+            
+            # Check convergence
+            converged = all(
+                self._haversine_distance(old_centroids[i][0], old_centroids[i][1],
+                                        centroids[i][0], centroids[i][1]) < 0.1
+                for i in old_centroids if i in centroids
+            )
+            if converged:
+                break
+        
+        self.execution_time = time.time() - start_time
+        metrics = self._evaluate_solution()
+        self.quality_score = metrics['overall_score']
+        
+        return {
+            'territories': dict(self.territories),
+            'algorithm': 'kmeans',
+            'execution_time': self.execution_time,
+            'quality_score': self.quality_score,
+            'iterations': iteration + 1,
+            'message': f'KMeans clustering completed in {iteration + 1} iterations'
+        }
+
+
+class GreedySeedGrowth(TerritoryAlgorithm):
+    """Greedy Seed Growth - Load balancing approach"""
+    
+    def solve(self, num_territories: int, 
+              max_zones_per_territory: int = 50) -> Dict:
+        """
+        Thuật toán Greedy Seed Growth cân bằng tải
+        
+        Args:
+            num_territories: Số phân vùng cần tạo
+            max_zones_per_territory: Số zones tối đa trong một phân vùng
+        """
+        start_time = time.time()
+        self.territories = defaultdict(list)
+        
+        if not self.zones or num_territories <= 0:
+            return {
+                'territories': {},
+                'algorithm': 'greedy',
+                'execution_time': 0,
+                'quality_score': 0,
+                'message': 'Invalid input'
+            }
+        
+        # Tính workload cho mỗi zone
+        for zone in self.zones:
+            zone.workload = self._calculate_workload(zone)
+        
+        # Sắp xếp zones theo workload (descending)
+        sorted_zones = sorted(self.zones, key=lambda z: z.workload, reverse=True)
+        
+        # Chọn seed: zones có workload cao nhất
+        seeds = sorted_zones[:num_territories]
+        seed_ids = {i: seed.id for i, seed in enumerate(seeds)}
+        
+        # Khởi tạo territories với seed zones
+        for territory_id, seed in enumerate(seeds):
+            self.territories[territory_id] = [seed.id]
+        
+        # Bộ zones chưa được gán
+        unassigned = set(z.id for z in sorted_zones[num_territories:])
+        
+        # Greedy growth: thêm zones liền kề với workload cân bằng
+        while unassigned:
+            # Tìm zone chưa gán có workload cao nhất
+            best_zone = None
+            best_workload = -1
+            
+            for zone_id in unassigned:
+                zone = self.zone_map[zone_id]
+                if zone.workload > best_workload:
+                    best_workload = zone.workload
+                    best_zone = zone_id
+            
+            if best_zone is None:
+                break
+            
+            # Gán zone này cho phân vùng có tải thấp nhất
+            min_workload_territory = min(
+                self.territories.keys(),
+                key=lambda tid: sum(
+                    self._calculate_workload(self.zone_map[zid])
+                    for zid in self.territories[tid]
+                    if len(self.territories[tid]) < max_zones_per_territory
+                )
+            )
+            
+            self.territories[min_workload_territory].append(best_zone)
+            unassigned.remove(best_zone)
+        
+        # Gán các zones còn lại
+        for zone_id in unassigned:
+            min_workload_territory = min(
+                self.territories.keys(),
+                key=lambda tid: sum(
+                    self._calculate_workload(self.zone_map[zid])
+                    for zid in self.territories[tid]
+                )
+            )
+            self.territories[min_workload_territory].append(zone_id)
+        
+        self.execution_time = time.time() - start_time
+        metrics = self._evaluate_solution()
+        self.quality_score = metrics['overall_score']
+        
+        return {
+            'territories': dict(self.territories),
+            'algorithm': 'greedy',
+            'execution_time': self.execution_time,
+            'quality_score': self.quality_score,
+            'message': 'Greedy Seed Growth completed'
+        }
+
+
+class LocalSearch(TerritoryAlgorithm):
+    """Local Search - Optimize existing territories"""
+    
+    def solve(self, initial_territories: Dict[int, List[int]], 
+              swap_iterations: int = 10) -> Dict:
+        """
+        Local Search - Điều chỉnh tối ưu các phân vùng hiện tại
+        
+        Args:
+            initial_territories: Các phân vùng hiện tại {territory_id: [zone_ids]}
+            swap_iterations: Số lần thử swap
+        """
+        start_time = time.time()
+        self.territories = {k: list(v) for k, v in initial_territories.items()}
+        
+        # Tính workload
+        for zone in self.zones:
+            zone.workload = self._calculate_workload(zone)
+        
+        improved = True
+        iteration = 0
+        
+        while improved and iteration < swap_iterations:
+            improved = False
+            iteration += 1
+            
+            # Thử swap zones giữa các territories
+            territory_ids = list(self.territories.keys())
+            
+            for i in range(len(territory_ids)):
+                for j in range(i + 1, len(territory_ids)):
+                    tid1, tid2 = territory_ids[i], territory_ids[j]
+                    
+                    if not self.territories[tid1] or not self.territories[tid2]:
+                        continue
+                    
+                    # Tính hiện tại workload
+                    current_score = self._quality_of_partition(tid1, tid2)
+                    
+                    # Thử swap từng zone từ tid1 sang tid2
+                    for zone_id in self.territories[tid1][:]:
+                        self.territories[tid1].remove(zone_id)
+                        self.territories[tid2].append(zone_id)
+                        
+                        new_score = self._quality_of_partition(tid1, tid2)
+                        
+                        if new_score > current_score:
+                            # Swap tốt hơn, giữ lại
+                            improved = True
+                            break
+                        else:
+                            # Swap không tốt, hoàn tác
+                            self.territories[tid2].remove(zone_id)
+                            self.territories[tid1].append(zone_id)
+                    
+                    if improved:
+                        break
+                
+                if improved:
+                    break
+        
+        self.execution_time = time.time() - start_time
+        metrics = self._evaluate_solution()
+        self.quality_score = metrics['overall_score']
+        
+        return {
+            'territories': dict(self.territories),
+            'algorithm': 'localsearch',
+            'execution_time': self.execution_time,
+            'quality_score': self.quality_score,
+            'iterations': iteration,
+            'message': f'Local Search completed in {iteration} iterations'
+        }
+    
+    def _quality_of_partition(self, tid1: int, tid2: int) -> float:
+        """Tính chất lượng của một cặp phân vùng"""
+        workload1 = sum(
+            self._calculate_workload(self.zone_map[zid])
+            for zid in self.territories[tid1]
+        )
+        workload2 = sum(
+            self._calculate_workload(self.zone_map[zid])
+            for zid in self.territories[tid2]
+        )
+        
+        # Chất lượng = 100 / (1 + |workload1 - workload2|)
+        return 100 / (1 + abs(workload1 - workload2))
+
+---
+File: D:/project 2\backend\auth.py
+---
+from passlib.context import CryptContext
+from jose import jwt
+
+SECRET = "SECRET_KEY"
+
+pwd_context = CryptContext(schemes=["bcrypt"])
+
+
+def hash_password(password):
+    # Bcrypt chỉ hỗ trợ tối đa 72 bytes
+    password = password[:72]
+    return pwd_context.hash(password)
+
+
+def verify_password(password, hashed):
+    # Truncate password khi verify để match với hash đã lưu
+    password = password[:72]
+    return pwd_context.verify(password, hashed)
+
+
+def create_token(data):
+
+    return jwt.encode(data, SECRET, algorithm="HS256")
+---
+File: D:/project 2\backend\create_test_accounts.py
+---
+#!/usr/bin/env python3
+from database import SessionLocal, engine, Base
+from models import User
+from sqlalchemy import text
+from auth import hash_password 
+
+# Ensure tables exist (creates missing tables)
+Base.metadata.create_all(bind=engine)
+
+# Ensure `email` column exists in `users` table for older DBs
+with engine.connect() as conn:
+    res = conn.execute(text("PRAGMA table_info('users')")).fetchall()
+    cols = [row[1] for row in res]
+    if 'email' not in cols:
+        # Add a nullable email column; existing rows will have NULL
+        conn.execute(text("ALTER TABLE users ADD COLUMN email VARCHAR"))
+        conn.commit()
+
+
+# Create database session
+db = SessionLocal()
+
+# Clear old users first
+db.query(User).delete()
+db.commit()
+
+# Test accounts
+accounts = [
+    {
+        "username": "admin1",
+        "email": "admin@example.com",
+        "password": "Admin123!",
+        "role": "admin",
+        "full_name": "Admin User",
+        "phone": "0123456789",
+        "is_approved": True
+    },
+    {
+        "username": "sales1",
+        "email": "sales@example.com",
+        "password": "Sales123!",
+        "role": "sales",
+        "full_name": "Sales User",
+        "phone": "0987654321",
+        "is_approved": True  # Auto-approve for testing
+    },
+    {
+        "username": "customer1",
+        "email": "customer@example.com",
+        "password": "Customer123!",
+        "role": "customer",
+        "full_name": "Customer User",
+        "phone": "0912345678",
+        "is_approved": True
+    }
+]
+
+# Create accounts
+for acc in accounts:
+    user = User(
+        username=acc["username"],
+        email=acc["email"],
+        password=hash_password(acc["password"]),
+        role=acc["role"],
+        full_name=acc["full_name"],
+        phone=acc["phone"],
+        is_approved=acc["is_approved"]
+    )
+    db.add(user)
+    print(f"✓ Created {acc['username']} ({acc['role']})")
+
+db.commit()
+db.close()
+
+print("\n✓ All test accounts created successfully!")
+print("\nTest Credentials:")
+print("Admin: admin1 / Admin123!")
+print("Sales: sales1 / Sales123!")
+print("Customer: customer1 / Customer123!")
+
+---
+File: D:/project 2\backend\database.py
+---
+import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
+
+# Use absolute path to ensure consistent database location
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app.db")
+DATABASE_URL = f"sqlite:///{DB_PATH}"
+
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False}
+)
+
+SessionLocal = sessionmaker(bind=engine)
+
+Base = declarative_base()
+---
+File: D:/project 2\backend\generate_adjacency.py
+---
+import sys
+import os
+from shapely.geometry import shape
+from sqlalchemy.orm import Session
+
+# Thêm đường dẫn để import được các module từ backend
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
+
+from database import SessionLocal, engine
+from models import Zone, ZoneAdjacency, Base
+
+def generate_adjacencies(district_id: int = None):
+    db = SessionLocal()
+    try:
+        # 1. Lấy danh sách các Zone (có thể lọc theo District)
+        query = db.query(Zone)
+        if district_id:
+            query = query.filter(Zone.district_id == district_id)
+        zones = query.all()
+
+        print(f"🔍 Đang xử lý {len(zones)} zones...")
+
+        # 2. Xóa các quan hệ kề cũ để làm mới hoàn toàn
+        # (Tùy chọn: Nếu bạn chỉ muốn cập nhật thêm thì bỏ dòng này)
+        zone_ids = [z.id for z in zones]
+        db.query(ZoneAdjacency).filter(
+            ZoneAdjacency.zone_id1.in_(zone_ids)
+        ).delete(synchronize_session=False)
+        db.commit()
+
+        adj_count = 0
+        
+        # 3. Chuyển đổi GeoJSON sang Shapely objects một lần để tối ưu
+        zone_geoms = []
+        for z in zones:
+            if z.geometry:
+                try:
+                    # shape() chuyển đổi dict GeoJSON sang đối tượng Shapely
+                    zone_geoms.append({
+                        "id": z.id,
+                        "name": z.name,
+                        "poly": shape(z.geometry)
+                    })
+                except Exception as e:
+                    print(f"⚠️ Lỗi định dạng hình học tại Zone {z.name}: {e}")
+
+        # 4. So sánh từng cặp (Nested Loop - O(n^2))
+        # Với số lượng phường trong 1 quận (~20-50), vòng lặp này chạy rất nhanh.
+        for i in range(len(zone_geoms)):
+            for j in range(i + 1, len(zone_geoms)):
+                z1 = zone_geoms[i]
+                z2 = zone_geoms[j]
+
+                # Kiểm tra xem 2 đa giác có chạm nhau không
+                # intersects() bao gồm cả việc chạm biên hoặc chồng lấn nhẹ
+                # touches() chỉ tính chạm biên (đôi khi dữ liệu lỗi có khe hở nhỏ sẽ không nhận)
+                if z1["poly"].intersects(z2["poly"]):
+                    # Tạo quan hệ 2 chiều (z1 kề z2 và z2 kề z1)
+                    adj1 = ZoneAdjacency(zone_id1=z1["id"], zone_id2=z2["id"], is_adjacent=True)
+                    adj2 = ZoneAdjacency(zone_id1=z2["id"], zone_id2=z1["id"], is_adjacent=True)
+                    
+                    db.add(adj1)
+                    db.add(adj2)
+                    adj_count += 1
+                    print(f" ✅ {z1['name']} <--> {z2['name']}")
+
+        db.commit()
+        print(f"\n🎉 HOÀN TẤT! Đã tạo {adj_count} cặp quan hệ kề nhau.")
+
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Lỗi: {e}")
+    finally:
+        db.close()
+
+if __name__ == "__main__":
+    # Bạn có thể truyền ID của quận vào đây, hoặc để None để chạy toàn bộ
+    # Ví dụ: generate_adjacencies(district_id=1)
+    generate_adjacencies()
+---
+File: D:/project 2\backend\main.py
+---
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+import models
+from database import engine
+from routes import router
+import uvicorn
+
+models.Base.metadata.create_all(bind=engine)
+
+app = FastAPI()
+
+# Thêm CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(router)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+---
+File: D:/project 2\backend\models.py
+---
+from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, ForeignKey, JSON, Text
+from sqlalchemy.orm import relationship
+from database import Base
+from datetime import datetime
+
+# ============ USER MODELS ============
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True, nullable=False)
+    email = Column(String, unique=True, nullable=False)
+    password = Column(String, nullable=False)
+    role = Column(String, nullable=False)  # admin, sales, customer
+    # is_approved: customer=True (auto-approved), sales=False (needs admin approval), admin=True (created by system)
+    is_approved = Column(Boolean, default=False)
+    full_name = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    sales_territories = relationship("Territory", back_populates="sales_user", foreign_keys="Territory.sales_id")
+    activities = relationship("ZoneActivity", back_populates="user")
+
+
+# ============ ZONE & DISTRICT MODELS ============
+class Zone(Base):
+    """Basic units - các đơn vị cơ bản để chia phân vùng"""
+    __tablename__ = "zones"
+
+    id = Column(Integer, primary_key=True)
+    zone_code = Column(String, unique=True, nullable=False)
+    district_id = Column(Integer, ForeignKey("districts.id"))
+    name = Column(String, nullable=False)
+    
+    # Tọa độ (longitude, latitude hoặc GeoJSON)
+    geometry = Column(JSON, nullable=True)  # GeoJSON format
+    center_lat = Column(Float, nullable=True)
+    center_lng = Column(Float, nullable=True)
+    area_size = Column(Float, nullable=True)  # Diện tích (m2 hoặc km2)
+    
+    # Hoạt động và thông tin khách hàng
+    num_customers = Column(Integer, default=0)
+    num_orders = Column(Integer, default=0)
+    revenue = Column(Float, default=0.0)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    district = relationship("District", back_populates="zones")
+    activity = relationship("ZoneActivity", uselist=False, back_populates="zone")
+    adjacencies = relationship("ZoneAdjacency", foreign_keys="ZoneAdjacency.zone_id1", back_populates="zone1")
+    distances = relationship("ZoneDistance", foreign_keys="ZoneDistance.zone_id1", back_populates="zone1")
+
+
+class District(Base):
+    """Huyện/quốc gia - chứa nhiều zones"""
+    __tablename__ = "districts"
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    center_lat = Column(Float, nullable=True)
+    center_lng = Column(Float, nullable=True)
+    total_area = Column(Float, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    zones = relationship("Zone", back_populates="district", cascade="all, delete-orphan")
+    territories = relationship("Territory", back_populates="district")
+
+
+# ============ ZONE ACTIVITY MODELS ============
+class ZoneActivity(Base):
+    """Thông tin hoạt động của từng zone"""
+    __tablename__ = "zone_activities"
+
+    id = Column(Integer, primary_key=True)
+    zone_id = Column(Integer, ForeignKey("zones.id"), nullable=False)
+    
+    # Thông tin khách hàng và đơn hàng
+    num_customers = Column(Integer, default=0)
+    num_orders = Column(Integer, default=0)
+    avg_order_value = Column(Float, default=0.0)
+    total_revenue = Column(Float, default=0.0)
+    
+    # Khác
+    population_density = Column(Float, nullable=True)
+    business_density = Column(Float, nullable=True)
+    traffic_density = Column(Float, nullable=True)
+    notes = Column(Text, nullable=True)
+    
+    updated_by = Column(Integer, ForeignKey("users.id"))
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    zone = relationship("Zone", back_populates="activity")
+    user = relationship("User", back_populates="activities")
+
+
+class ZoneAdjacency(Base):
+    """Ma trận kề - các zones liền kề nhau"""
+    __tablename__ = "zone_adjacencies"
+
+    id = Column(Integer, primary_key=True)
+    zone_id1 = Column(Integer, ForeignKey("zones.id"), nullable=False)
+    zone_id2 = Column(Integer, ForeignKey("zones.id"), nullable=False)
+    is_adjacent = Column(Boolean, default=True)  # True nếu hai zone liền kề
+    
+    # Relationships
+    zone1 = relationship("Zone", foreign_keys=[zone_id1], back_populates="adjacencies")
+    zone2 = relationship("Zone", foreign_keys=[zone_id2])
+
+
+class ZoneDistance(Base):
+    """Ma trận khoảng cách - khoảng cách giữa các zones"""
+    __tablename__ = "zone_distances"
+
+    id = Column(Integer, primary_key=True)
+    zone_id1 = Column(Integer, ForeignKey("zones.id"), nullable=False)
+    zone_id2 = Column(Integer, ForeignKey("zones.id"), nullable=False)
+    distance = Column(Float, nullable=False)  # Tính bằng km
+    travel_time = Column(Float, nullable=True)  # Tính bằng phút
+    
+    # Relationships
+    zone1 = relationship("Zone", foreign_keys=[zone_id1], back_populates="distances")
+    zone2 = relationship("Zone", foreign_keys=[zone_id2])
+
+
+# ============ TERRITORY MODELS ============
+class Territory(Base):
+    """Phân vùng bán hàng được giao cho sales person"""
+    __tablename__ = "territories"
+
+    id = Column(Integer, primary_key=True)
+    territory_code = Column(String, unique=True, nullable=False)
+    sales_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    district_id = Column(Integer, ForeignKey("districts.id"), nullable=False)
+    
+    # Các zones trong phân vùng này
+    zone_ids = Column(JSON, nullable=True)  # List of zone IDs
+    
+    # Thống kê
+    num_zones = Column(Integer, default=0)
+    num_customers = Column(Integer, default=0)
+    num_orders = Column(Integer, default=0)
+    total_revenue = Column(Float, default=0.0)
+    avg_distance = Column(Float, nullable=True)
+    
+    # Thuật toán được sử dụng
+    algorithm_used = Column(String, nullable=True)  # kmeans, greedy, localsearch
+    
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    sales_user = relationship("User", back_populates="sales_territories", foreign_keys=[sales_id])
+    district = relationship("District", back_populates="territories")
+
+
+class TerritoryHistory(Base):
+    """Lịch sử thay đổi phân vùng"""
+    __tablename__ = "territory_histories"
+
+    id = Column(Integer, primary_key=True)
+    territory_id = Column(Integer, ForeignKey("territories.id"))
+    action = Column(String, nullable=False)  # created, updated, zone_added, zone_removed
+    changed_zones = Column(JSON, nullable=True)
+    previous_zones = Column(JSON, nullable=True)
+    changed_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+---
+File: D:/project 2\backend\routes.py
+---
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import and_
+
+import models
+import schemas
+import auth
+from database import SessionLocal
+from algorithms import KMeansClustering, GreedySeedGrowth, LocalSearch
+from typing import List, Dict, Any
+
+router = APIRouter()
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# ============ AUTH ROUTES ============
+@router.post("/register")
+def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    """
+    Register new user
+    - customer: auto-approved (is_approved = True)
+    - sales: needs admin approval (is_approved = False)
+    - admin: cannot be registered here (must be created by admin)
+    """
+    try:
+        # Kiểm tra username tồn tại
+        existing_username = db.query(models.User).filter(
+            models.User.username == user.username
+        ).first()
+        if existing_username:
+            raise HTTPException(status_code=400, detail="Tên đăng nhập đã tồn tại")
+        
+        # Kiểm tra email tồn tại
+        existing_email = db.query(models.User).filter(
+            models.User.email == user.email
+        ).first()
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Email đã được đăng ký")
+        
+        hashed = auth.hash_password(user.password)
+
+        # Determine approval status based on role
+        is_approved = (user.role == 'customer')  # Only customer is auto-approved
+
+        new_user = models.User(
+            username=user.username,
+            email=user.email,
+            password=hashed,
+            role=user.role,
+            full_name=user.full_name,
+            phone=user.phone,
+            is_approved=is_approved
+        )
+
+        db.add(new_user)
+        db.commit()
+        
+        # Different messages based on role
+        if user.role == 'customer':
+            msg = "Đăng ký thành công! Bạn có thể đăng nhập ngay."
+        else:  # sales
+            msg = "Đăng ký thành công! Vui lòng chờ admin duyệt tài khoản của bạn."
+        
+        return {"msg": msg}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/login")
+def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
+    db_user = db.query(models.User).filter(
+        models.User.username == user.username
+    ).first()
+
+    if not db_user:
+        raise HTTPException(status_code=401, detail="Tên đăng nhập hoặc mật khẩu không chính xác")
+
+    if not auth.verify_password(user.password, db_user.password):
+        raise HTTPException(status_code=401, detail="Tên đăng nhập hoặc mật khẩu không chính xác")
+
+    token = auth.create_token({
+        "id": db_user.id,
+        "role": db_user.role,
+        "username": db_user.username
+    })
+
+    return {"token": token, "role": db_user.role, "id": db_user.id}
+
+
+# ============ ADMIN ACCOUNT MANAGEMENT ROUTES ============
+@router.post("/admin/create-sales")
+def admin_create_sales(user_data: schemas.AdminCreateSales, db: Session = Depends(get_db)):
+    """Admin creates sales account directly (auto-approved)"""
+    try:
+        # Kiểm tra username tồn tại
+        existing_username = db.query(models.User).filter(
+            models.User.username == user_data.username
+        ).first()
+        if existing_username:
+            raise HTTPException(status_code=400, detail="Tên đăng nhập đã tồn tại")
+        
+        # Kiểm tra email tồn tại
+        existing_email = db.query(models.User).filter(
+            models.User.email == user_data.email
+        ).first()
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Email đã được đăng ký")
+        
+        hashed = auth.hash_password(user_data.password)
+
+        new_sales = models.User(
+            username=user_data.username,
+            email=user_data.email,
+            password=hashed,
+            role='sales',
+            full_name=user_data.full_name,
+            phone=user_data.phone,
+            is_approved=True  # Admin created, auto-approved
+        )
+
+        db.add(new_sales)
+        db.commit()
+        return {"msg": "Tài khoản sales được tạo thành công!", "id": new_sales.id}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/create-admin")
+def admin_create_admin(user_data: schemas.AdminCreateAdmin, db: Session = Depends(get_db)):
+    """Admin creates another admin account"""
+    try:
+        # Kiểm tra username tồn tại
+        existing_username = db.query(models.User).filter(
+            models.User.username == user_data.username
+        ).first()
+        if existing_username:
+            raise HTTPException(status_code=400, detail="Tên đăng nhập đã tồn tại")
+        
+        # Kiểm tra email tồn tại
+        existing_email = db.query(models.User).filter(
+            models.User.email == user_data.email
+        ).first()
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Email đã được đăng ký")
+        
+        hashed = auth.hash_password(user_data.password)
+
+        new_admin = models.User(
+            username=user_data.username,
+            email=user_data.email,
+            password=hashed,
+            role='admin',
+            full_name=user_data.full_name,
+            phone=user_data.phone,
+            is_approved=True  # Admin created, auto-approved
+        )
+
+        db.add(new_admin)
+        db.commit()
+        return {"msg": "Tài khoản admin được tạo thành công!", "id": new_admin.id}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/admin/pending-sales")
+def get_pending_sales(db: Session = Depends(get_db)):
+    """Get list of pending sales approvals"""
+    pending_sales = db.query(models.User).filter(
+        and_(
+            models.User.role == 'sales',
+            models.User.is_approved == False
+        )
+    ).all()
+    return pending_sales
+
+
+@router.post("/admin/approve-sales/{user_id}")
+def approve_sales(user_id: int, approval: schemas.ApproveSalesRequest, db: Session = Depends(get_db)):
+    """Admin approves or rejects sales user"""
+    user = db.query(models.User).filter(models.User.id == approval.user_id).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User không tìm thấy")
+    
+    if user.role != 'sales':
+        raise HTTPException(status_code=400, detail="User này không phải sales role")
+    
+    user.is_approved = approval.is_approved
+    db.commit()
+    
+    status = "duyệt" if approval.is_approved else "từ chối"
+    return {"msg": f"Tài khoản sales được {status} thành công!"}
+
+
+# ============ DISTRICT ROUTES ============
+@router.post("/districts")
+def create_district(district: schemas.DistrictCreate, db: Session = Depends(get_db)):
+    """Tạo district"""
+    existing = db.query(models.District).filter(
+        models.District.code == district.code
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Mã quận đã tồn tại")
+    
+    new_district = models.District(
+        code=district.code,
+        name=district.name,
+        center_lat=district.center_lat,
+        center_lng=district.center_lng,
+        total_area=district.total_area
+    )
+    db.add(new_district)
+    db.commit()
+    return new_district
+
+
+@router.get("/districts")
+def get_districts(db: Session = Depends(get_db)):
+    """Lấy danh sách districts"""
+    districts = db.query(models.District).all()
+    return districts
+
+
+@router.get("/districts/{district_id}")
+def get_district(district_id: int, db: Session = Depends(get_db)):
+    """Lấy chi tiết district"""
+    district = db.query(models.District).filter(
+        models.District.id == district_id
+    ).first()
+    
+    if not district:
+        raise HTTPException(status_code=404, detail="District không tìm thấy")
+    
+    return district
+
+
+@router.delete("/districts/{district_id}")
+def delete_district(district_id: int, db: Session = Depends(get_db)):
+    """Xóa district và tất cả zones, activities, territories liên quan"""
+    district = db.query(models.District).filter(
+        models.District.id == district_id
+    ).first()
+    
+    if not district:
+        raise HTTPException(status_code=404, detail="District không tìm thấy")
+    
+    # 1. Xóa tất cả territories liên quan
+    territories = db.query(models.Territory).filter(
+        models.Territory.district_id == district_id
+    ).all()
+    for territory in territories:
+        db.delete(territory)
+    
+    # 2. Xóa tất cả zones và activities liên quan
+    zones = db.query(models.Zone).filter(
+        models.Zone.district_id == district_id
+    ).all()
+    
+    for zone in zones:
+        # Xóa zone activities
+        activities = db.query(models.ZoneActivity).filter(
+            models.ZoneActivity.zone_id == zone.id
+        ).all()
+        for activity in activities:
+            db.delete(activity)
+        
+        # Xóa zone adjacencies
+        adjacencies = db.query(models.ZoneAdjacency).filter(
+            (models.ZoneAdjacency.zone_id1 == zone.id) | (models.ZoneAdjacency.zone_id2 == zone.id)
+        ).all()
+        for adjacency in adjacencies:
+            db.delete(adjacency)
+        
+        # Xóa zone distances
+        distances = db.query(models.ZoneDistance).filter(
+            (models.ZoneDistance.zone_id1 == zone.id) | (models.ZoneDistance.zone_id2 == zone.id)
+        ).all()
+        for distance in distances:
+            db.delete(distance)
+        
+        # Xóa zone
+        db.delete(zone)
+    
+    # 3. Xóa district
+    db.delete(district)
+    db.commit()
+    
+    return {"msg": "Đã xóa District và tất cả dữ liệu liên quan thành công"}
+
+
+# ============ ZONE ROUTES ============
+@router.post("/zones")
+def create_zone(zone: schemas.ZoneCreate, db: Session = Depends(get_db)):
+    """Tạo zone"""
+    existing = db.query(models.Zone).filter(
+        models.Zone.zone_code == zone.zone_code
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Mã zone đã tồn tại")
+    
+    new_zone = models.Zone(
+        zone_code=zone.zone_code,
+        district_id=zone.district_id,
+        name=zone.name,
+        geometry=zone.geometry,
+        center_lat=zone.center_lat,
+        center_lng=zone.center_lng,
+        area_size=zone.area_size,
+        num_customers=zone.num_customers,
+        num_orders=zone.num_orders,
+        revenue=zone.revenue
+    )
+    db.add(new_zone)
+    db.commit()
+    return new_zone
+
+
+@router.get("/zones")
+def get_zones(district_id: int = Query(None), db: Session = Depends(get_db)):
+    """Lấy danh sách zones"""
+    query = db.query(models.Zone)
+    if district_id:
+        query = query.filter(models.Zone.district_id == district_id)
+    return query.all()
+
+
+@router.get("/zones/{zone_id}")
+def get_zone(zone_id: int, db: Session = Depends(get_db)):
+    """Lấy chi tiết zone"""
+    zone = db.query(models.Zone).filter(models.Zone.id == zone_id).first()
+    if not zone:
+        raise HTTPException(status_code=404, detail="Zone không tìm thấy")
+    return zone
+
+
+@router.put("/zones/{zone_id}")
+def update_zone(zone_id: int, zone: schemas.ZoneUpdate, db: Session = Depends(get_db)):
+    """Cập nhật zone"""
+    db_zone = db.query(models.Zone).filter(models.Zone.id == zone_id).first()
+    if not db_zone:
+        raise HTTPException(status_code=404, detail="Zone không tìm thấy")
+    
+    update_data = zone.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_zone, key, value)
+    
+    db.commit()
+    return db_zone
+
+
+@router.post("/zones/{zone_id}/activities")
+def create_zone_activity(zone_id: int, activity: schemas.ZoneActivityCreate, 
+                        db: Session = Depends(get_db)):
+    """Tạo hoạt động cho zone"""
+    zone = db.query(models.Zone).filter(models.Zone.id == zone_id).first()
+    if not zone:
+        raise HTTPException(status_code=404, detail="Zone không tìm thấy")
+    
+    # Xóa activity cũ nếu có
+    existing = db.query(models.ZoneActivity).filter(
+        models.ZoneActivity.zone_id == zone_id
+    ).first()
+    
+    if existing:
+        db.delete(existing)
+    
+    new_activity = models.ZoneActivity(
+        zone_id=zone_id,
+        num_customers=activity.num_customers,
+        num_orders=activity.num_orders,
+        avg_order_value=activity.avg_order_value,
+        total_revenue=activity.total_revenue,
+        population_density=activity.population_density,
+        business_density=activity.business_density,
+        traffic_density=activity.traffic_density,
+        notes=activity.notes
+    )
+    
+    # Cập nhật thông tin zone
+    zone.num_customers = activity.num_customers
+    zone.num_orders = activity.num_orders
+    zone.revenue = activity.total_revenue
+    
+    db.add(new_activity)
+    db.commit()
+    return new_activity
+
+
+@router.get("/zones/{zone_id}/activities")
+def get_zone_activity(zone_id: int, db: Session = Depends(get_db)):
+    """Lấy hoạt động của zone"""
+    activity = db.query(models.ZoneActivity).filter(
+        models.ZoneActivity.zone_id == zone_id
+    ).first()
+    
+    if not activity:
+        raise HTTPException(status_code=404, detail="Hoạt động zone không tìm thấy")
+    
+    return activity
+
+@router.delete("/zones/{zone_id}")
+def delete_zone(zone_id: int, db: Session = Depends(get_db)):
+    """Xóa zone và các activity liên quan"""
+    zone = db.query(models.Zone).filter(models.Zone.id == zone_id).first()
+    if not zone:
+        raise HTTPException(status_code=404, detail="Zone không tìm thấy")
+    
+    # 1. Xóa Activity của Zone này (nếu có) để tránh lỗi khóa ngoại (Foreign Key)
+    activity = db.query(models.ZoneActivity).filter(models.ZoneActivity.zone_id == zone_id).first()
+    if activity:
+        db.delete(activity)
+        
+    # 2. Xóa Zone
+    db.delete(zone)
+    db.commit()
+    return {"msg": "Đã xóa Zone thành công"}
+
+# ============ ZONE ADJACENCY & DISTANCE ROUTES ============
+@router.post("/zones/adjacency")
+def create_adjacency(zone_id1: int, zone_id2: int, db: Session = Depends(get_db)):
+    """Đánh dấu 2 zones liền kề"""
+    adj = models.ZoneAdjacency(
+        zone_id1=zone_id1,
+        zone_id2=zone_id2,
+        is_adjacent=True
+    )
+    db.add(adj)
+    db.commit()
+    return adj
+
+
+@router.post("/zones/distance")
+def create_distance(zone_id1: int, zone_id2: int, distance: float, 
+                   travel_time: float = None, db: Session = Depends(get_db)):
+    """Tạo khoảng cách giữa 2 zones"""
+    dist = models.ZoneDistance(
+        zone_id1=zone_id1,
+        zone_id2=zone_id2,
+        distance=distance,
+        travel_time=travel_time
+    )
+    db.add(dist)
+    db.commit()
+    return dist
+
+
+@router.get("/districts/{district_id}/adjacency-matrix")
+def get_adjacency_matrix(district_id: int, db: Session = Depends(get_db)):
+    """Lấy ma trận kề của district"""
+    zones = db.query(models.Zone).filter(
+        models.Zone.district_id == district_id
+    ).all()
+    
+    zone_ids = [z.id for z in zones]
+    n = len(zone_ids)
+    
+    # Khởi tạo ma trận 0
+    matrix = [[0] * n for _ in range(n)]
+    
+    # Điền thông tin adjacency
+    adjacencies = db.query(models.ZoneAdjacency).filter(
+        models.ZoneAdjacency.zone_id1.in_(zone_ids),
+        models.ZoneAdjacency.zone_id2.in_(zone_ids)
+    ).all()
+    
+    id_to_idx = {zid: i for i, zid in enumerate(zone_ids)}
+    
+    for adj in adjacencies:
+        if adj.zone_id1 in id_to_idx and adj.zone_id2 in id_to_idx:
+            i, j = id_to_idx[adj.zone_id1], id_to_idx[adj.zone_id2]
+            matrix[i][j] = 1
+            matrix[j][i] = 1
+    
+    return {
+        'zone_ids': zone_ids,
+        'matrix': matrix
+    }
+
+
+@router.get("/districts/{district_id}/distance-matrix")
+def get_distance_matrix(district_id: int, db: Session = Depends(get_db)):
+    """Lấy ma trận khoảng cách của district"""
+    zones = db.query(models.Zone).filter(
+        models.Zone.district_id == district_id
+    ).all()
+    
+    zone_ids = [z.id for z in zones]
+    n = len(zone_ids)
+    
+    # Khởi tạo ma trận
+    matrix = [[0.0] * n for _ in range(n)]
+    
+    # Điền thông tin distance
+    distances = db.query(models.ZoneDistance).filter(
+        models.ZoneDistance.zone_id1.in_(zone_ids),
+        models.ZoneDistance.zone_id2.in_(zone_ids)
+    ).all()
+    
+    id_to_idx = {zid: i for i, zid in enumerate(zone_ids)}
+    
+    for dist in distances:
+        if dist.zone_id1 in id_to_idx and dist.zone_id2 in id_to_idx:
+            i, j = id_to_idx[dist.zone_id1], id_to_idx[dist.zone_id2]
+            matrix[i][j] = dist.distance
+            matrix[j][i] = dist.distance
+    
+    return {
+        'zone_ids': zone_ids,
+        'matrix': matrix
+    }
+
+
+# ============ TERRITORY ROUTES ============
+@router.post("/territories")
+def create_territory(territory: schemas.TerritoryCreate, db: Session = Depends(get_db)):
+    """Tạo phân vùng"""
+    existing = db.query(models.Territory).filter(
+        models.Territory.territory_code == territory.territory_code
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Mã phân vùng đã tồn tại")
+    
+    # Tính thống kê
+    zones = db.query(models.Zone).filter(models.Zone.id.in_(territory.zone_ids)).all()
+    num_customers = sum(z.num_customers for z in zones)
+    num_orders = sum(z.num_orders for z in zones)
+    total_revenue = sum(z.revenue for z in zones)
+    
+    new_territory = models.Territory(
+        territory_code=territory.territory_code,
+        sales_id=territory.sales_id,
+        district_id=territory.district_id,
+        zone_ids=territory.zone_ids,
+        num_zones=len(territory.zone_ids),
+        num_customers=num_customers,
+        num_orders=num_orders,
+        total_revenue=total_revenue,
+        algorithm_used=territory.algorithm_used
+    )
+    
+    db.add(new_territory)
+    db.commit()
+    return new_territory
+
+
+@router.get("/territories")
+def get_territories(sales_id: int = Query(None), district_id: int = Query(None),
+                   db: Session = Depends(get_db)):
+    """Lấy danh sách phân vùng"""
+    query = db.query(models.Territory)
+    if sales_id:
+        query = query.filter(models.Territory.sales_id == sales_id)
+    if district_id:
+        query = query.filter(models.Territory.district_id == district_id)
+    return query.all()
+
+
+@router.get("/territories/{territory_id}")
+def get_territory(territory_id: int, db: Session = Depends(get_db)):
+    """Lấy chi tiết phân vùng"""
+    territory = db.query(models.Territory).filter(
+        models.Territory.id == territory_id
+    ).first()
+    if not territory:
+        raise HTTPException(status_code=404, detail="Phân vùng không tìm thấy")
+    return territory
+
+
+@router.put("/territories/{territory_id}")
+def update_territory(territory_id: int, territory: schemas.TerritoryUpdate, 
+                    db: Session = Depends(get_db)):
+    """Cập nhật phân vùng"""
+    db_territory = db.query(models.Territory).filter(
+        models.Territory.id == territory_id
+    ).first()
+    if not db_territory:
+        raise HTTPException(status_code=404, detail="Phân vùng không tìm thấy")
+    
+    if territory.zone_ids:
+        zones = db.query(models.Zone).filter(models.Zone.id.in_(territory.zone_ids)).all()
+        db_territory.zone_ids = territory.zone_ids
+        db_territory.num_zones = len(territory.zone_ids)
+        db_territory.num_customers = sum(z.num_customers for z in zones)
+        db_territory.num_orders = sum(z.num_orders for z in zones)
+        db_territory.total_revenue = sum(z.revenue for z in zones)
+    
+    if territory.is_active is not None:
+        db_territory.is_active = territory.is_active
+    
+    db.commit()
+    return db_territory
+
+
+@router.delete("/territories/{territory_id}")
+def delete_territory(territory_id: int, db: Session = Depends(get_db)):
+    """Xóa phân vùng"""
+    territory = db.query(models.Territory).filter(
+        models.Territory.id == territory_id
+    ).first()
+    
+    if not territory:
+        raise HTTPException(status_code=404, detail="Phân vùng không tìm thấy")
+    
+    db.delete(territory)
+    db.commit()
+    
+    return {"msg": "Đã xóa Territory thành công"}
+
+
+# ============ ALGORITHM ROUTES ============
+@router.post("/algorithms/kmeans")
+def run_kmeans(input_data: schemas.KMeansInput, db: Session = Depends(get_db)):
+    """Chạy thuật toán K-means Clustering"""
+    try:
+        # Lấy zones của district
+        zones = db.query(models.Zone).filter(
+            models.Zone.district_id == input_data.district_id
+        ).all()
+        
+        if not zones:
+            raise HTTPException(status_code=404, detail="Không tìm thấy zones trong district")
+        
+        # Chuẩn bị dữ liệu cho thuật toán
+        zones_data = [
+            {
+                'id': z.id,
+                'code': z.zone_code,
+                'lat': z.center_lat or 0,
+                'lng': z.center_lng or 0,
+                'num_customers': z.num_customers,
+                'num_orders': z.num_orders,
+                'revenue': z.revenue
+            }
+            for z in zones
+        ]
+        
+        # Lấy ma trận khoảng cách
+        distances = db.query(models.ZoneDistance).filter(
+            models.ZoneDistance.zone_id1.in_([z.id for z in zones]),
+            models.ZoneDistance.zone_id2.in_([z.id for z in zones])
+        ).all()
+        
+        distance_dict = {}
+        for d in distances:
+            if d.zone_id1 not in distance_dict:
+                distance_dict[d.zone_id1] = {}
+            distance_dict[d.zone_id1][d.zone_id2] = d.distance
+        
+        # Chạy thuật toán
+        algo = KMeansClustering(zones_data, distance_dict)
+        result = algo.solve(input_data.num_clusters, input_data.max_iterations)
+        
+        # Lưu territories vào DB
+        saved_territories = []
+        for i, (territory_id, zone_ids) in enumerate(result['territories'].items()):
+            # Chọn sales ngẫu nhiên hoặc để trống
+            sales_users = db.query(models.User).filter(
+                models.User.role == 'sales'
+            ).all()
+            
+            sales_id = sales_users[i % len(sales_users)].id if sales_users else None
+            
+            territory = models.Territory(
+                territory_code=f"KMEANS_{input_data.district_id}_{i}",
+                sales_id=sales_id,
+                district_id=input_data.district_id,
+                zone_ids=zone_ids,
+                num_zones=len(zone_ids),
+                algorithm_used='kmeans'
+            )
+            
+            # Tính thống kê
+            zones_in_territory = db.query(models.Zone).filter(
+                models.Zone.id.in_(zone_ids)
+            ).all()
+            territory.num_customers = sum(z.num_customers for z in zones_in_territory)
+            territory.num_orders = sum(z.num_orders for z in zones_in_territory)
+            territory.total_revenue = sum(z.revenue for z in zones_in_territory)
+            
+            db.add(territory)
+            saved_territories.append(territory)
+        
+        db.commit()
+        
+        return {
+            'algorithm': 'kmeans',
+            'execution_time': result['execution_time'],
+            'quality_score': result['quality_score'],
+            'num_territories': len(result['territories']),
+            'territories': [t.id for t in saved_territories],
+            'message': result['message']
+        }
+    
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/algorithms/greedy")
+def run_greedy(input_data: schemas.GreedySeedInput, db: Session = Depends(get_db)):
+    """Chạy thuật toán Greedy Seed Growth"""
+    try:
+        # Lấy zones của district
+        zones = db.query(models.Zone).filter(
+            models.Zone.district_id == input_data.district_id
+        ).all()
+        
+        if not zones:
+            raise HTTPException(status_code=404, detail="Không tìm thấy zones trong district")
+        
+        # Chuẩn bị dữ liệu
+        zones_data = [
+            {
+                'id': z.id,
+                'code': z.zone_code,
+                'lat': z.center_lat or 0,
+                'lng': z.center_lng or 0,
+                'num_customers': z.num_customers,
+                'num_orders': z.num_orders,
+                'revenue': z.revenue
+            }
+            for z in zones
+        ]
+        
+        distance_dict = {}
+        distances = db.query(models.ZoneDistance).filter(
+            models.ZoneDistance.zone_id1.in_([z.id for z in zones]),
+            models.ZoneDistance.zone_id2.in_([z.id for z in zones])
+        ).all()
+        
+        for d in distances:
+            if d.zone_id1 not in distance_dict:
+                distance_dict[d.zone_id1] = {}
+            distance_dict[d.zone_id1][d.zone_id2] = d.distance
+        
+        # Chạy thuật toán
+        algo = GreedySeedGrowth(zones_data, distance_dict)
+        result = algo.solve(input_data.num_territories, input_data.max_zones_per_territory)
+        
+        # Lưu territories
+        saved_territories = []
+        for i, (territory_id, zone_ids) in enumerate(result['territories'].items()):
+            sales_users = db.query(models.User).filter(
+                models.User.role == 'sales'
+            ).all()
+            
+            sales_id = sales_users[i % len(sales_users)].id if sales_users else None
+            
+            territory = models.Territory(
+                territory_code=f"GREEDY_{input_data.district_id}_{i}",
+                sales_id=sales_id,
+                district_id=input_data.district_id,
+                zone_ids=zone_ids,
+                num_zones=len(zone_ids),
+                algorithm_used='greedy'
+            )
+            
+            zones_in_territory = db.query(models.Zone).filter(
+                models.Zone.id.in_(zone_ids)
+            ).all()
+            territory.num_customers = sum(z.num_customers for z in zones_in_territory)
+            territory.num_orders = sum(z.num_orders for z in zones_in_territory)
+            territory.total_revenue = sum(z.revenue for z in zones_in_territory)
+            
+            db.add(territory)
+            saved_territories.append(territory)
+        
+        db.commit()
+        
+        return {
+            'algorithm': 'greedy',
+            'execution_time': result['execution_time'],
+            'quality_score': result['quality_score'],
+            'num_territories': len(result['territories']),
+            'territories': [t.id for t in saved_territories],
+            'message': result['message']
+        }
+    
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/algorithms/localsearch")
+def run_local_search(input_data: schemas.LocalSearchInput, db: Session = Depends(get_db)):
+    """Chạy thuật toán Local Search"""
+    try:
+        # Lấy territory hiện tại
+        territory = db.query(models.Territory).filter(
+            models.Territory.id == input_data.territory_id
+        ).first()
+        
+        if not territory:
+            raise HTTPException(status_code=404, detail="Phân vùng không tìm thấy")
+        
+        # Lấy tất cả zones của district này
+        district_zones = db.query(models.Zone).filter(
+            models.Zone.district_id == territory.district_id
+        ).all()
+        
+        # Lấy tất cả territories của district
+        all_territories = db.query(models.Territory).filter(
+            models.Territory.district_id == territory.district_id,
+            models.Territory.is_active == True
+        ).all()
+        
+        # Chuẩn bị dữ liệu
+        zones_data = [
+            {
+                'id': z.id,
+                'code': z.zone_code,
+                'lat': z.center_lat or 0,
+                'lng': z.center_lng or 0,
+                'num_customers': z.num_customers,
+                'num_orders': z.num_orders,
+                'revenue': z.revenue
+            }
+            for z in district_zones
+        ]
+        
+        distance_dict = {}
+        distances = db.query(models.ZoneDistance).all()
+        for d in distances:
+            if d.zone_id1 not in distance_dict:
+                distance_dict[d.zone_id1] = {}
+            distance_dict[d.zone_id1][d.zone_id2] = d.distance
+        
+        # Chuẩn bị initial territories
+        initial_territories = {t.id: t.zone_ids for t in all_territories}
+        
+        # Chạy thuật toán
+        algo = LocalSearch(zones_data, distance_dict)
+        result = algo.solve(initial_territories, input_data.swap_iterations)
+        
+        # Cập nhật territories trong DB
+        for t in all_territories:
+            if t.id in result['territories']:
+                new_zone_ids = result['territories'][t.id]
+                t.zone_ids = new_zone_ids
+                t.num_zones = len(new_zone_ids)
+                
+                zones_in_territory = db.query(models.Zone).filter(
+                    models.Zone.id.in_(new_zone_ids)
+                ).all()
+                t.num_customers = sum(z.num_customers for z in zones_in_territory)
+                t.num_orders = sum(z.num_orders for z in zones_in_territory)
+                t.total_revenue = sum(z.revenue for z in zones_in_territory)
+        
+        db.commit()
+        
+        return {
+            'algorithm': 'localsearch',
+            'execution_time': result['execution_time'],
+            'quality_score': result['quality_score'],
+            'iterations': result['iterations'],
+            'message': result['message']
+        }
+    
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ SALES ROUTES ============
+@router.get("/sales/{sales_id}/territories")
+def get_sales_territories(sales_id: int, db: Session = Depends(get_db)):
+    """Lấy phân vùng của sales person"""
+    territories = db.query(models.Territory).filter(
+        models.Territory.sales_id == sales_id,
+        models.Territory.is_active == True
+    ).all()
+    
+    return territories
+
+
+@router.get("/sales/{sales_id}/dashboard")
+def get_sales_dashboard(sales_id: int, db: Session = Depends(get_db)):
+    """Lấy dashboard cho sales person"""
+    territories = db.query(models.Territory).filter(
+        models.Territory.sales_id == sales_id,
+        models.Territory.is_active == True
+    ).all()
+    
+    total_customers = sum(t.num_customers for t in territories)
+    total_orders = sum(t.num_orders for t in territories)
+    total_revenue = sum(t.total_revenue for t in territories)
+    total_zones = sum(t.num_zones for t in territories)
+    
+    return {
+        'sales_id': sales_id,
+        'num_territories': len(territories),
+        'total_zones': total_zones,
+        'total_customers': total_customers,
+        'total_orders': total_orders,
+        'total_revenue': total_revenue,
+        'territories': territories
+    }
+
+
+# ============ ADMIN ROUTES ============
+@router.get("/admin/statistics")
+def get_admin_statistics(db: Session = Depends(get_db)):
+    """Lấy thống kê cho admin"""
+    total_zones = db.query(models.Zone).count()
+    total_territories = db.query(models.Territory).filter(
+        models.Territory.is_active == True
+    ).count()
+    total_sales = db.query(models.User).filter(models.User.role == 'sales').count()
+    total_customers = db.query(models.User).filter(models.User.role == 'customer').count()
+    
+    all_zones = db.query(models.Zone).all()
+    total_orders = sum(z.num_orders for z in all_zones)
+    total_revenue = sum(z.revenue for z in all_zones)
+    
+    return {
+        'total_zones': total_zones,
+        'total_territories': total_territories,
+        'total_sales': total_sales,
+        'total_customers': total_customers,
+        'total_orders': total_orders,
+        'total_revenue': total_revenue
+    }
+
+
+@router.get("/users")
+def get_users(role: str = Query(None), db: Session = Depends(get_db)):
+    """Lấy danh sách users"""
+    query = db.query(models.User)
+    if role:
+        query = query.filter(models.User.role == role)
+    return query.all()
+
+
+
+@router.post("/admin/approve-user/{user_id}")
+def approve_user(user_id: int, db: Session = Depends(get_db)):
+    """Phê duyệt tài khoản người dùng"""
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
+    
+    user.is_approved = True
+    db.commit()
+    
+    return {"msg": f"Đã phê duyệt tài khoản của {user.username}"}
+
+
+@router.post("/admin/reject-user/{user_id}")
+def reject_user(user_id: int, db: Session = Depends(get_db)):
+    """Từ chối tài khoản người dùng"""
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
+    
+    db.delete(user)
+    db.commit()
+    
+    return {"msg": f"Đã xóa tài khoản {user.username}"}
+---
+File: D:/project 2\backend\schemas.py
+---
+from pydantic import BaseModel, validator
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+import re
+
+# ============ USER SCHEMAS ============
+class UserCreate(BaseModel):
+    username: str
+    email: str
+    password: str
+    role: str  # sales, customer (admin cannot be created through registration)
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+
+    @validator('role')
+    def validate_role(cls, v):
+        if v not in ['sales', 'customer']:
+            raise ValueError('Role phải là sales hoặc customer. Admin phải được tạo bởi hệ thống.')
+        return v
+
+    @validator('password')
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError('Mật khẩu phải có ít nhất 8 ký tự')
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Mật khẩu phải chứa ít nhất 1 ký tự in hoa')
+        if not re.search(r'[0-9]', v):
+            raise ValueError('Mật khẩu phải chứa ít nhất 1 chữ số')
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError('Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt')
+        return v
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    role: str
+    full_name: Optional[str]
+    phone: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AdminCreateSales(BaseModel):
+    """Admin creates sales account directly"""
+    username: str
+    email: str
+    password: str
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+
+    @validator('password')
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError('Mật khẩu phải có ít nhất 8 ký tự')
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Mật khẩu phải chứa ít nhất 1 ký tự in hoa')
+        if not re.search(r'[0-9]', v):
+            raise ValueError('Mật khẩu phải chứa ít nhất 1 chữ số')
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError('Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt')
+        return v
+
+
+class AdminCreateAdmin(BaseModel):
+    """Admin creates another admin account"""
+    username: str
+    email: str
+    password: str
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+
+    @validator('password')
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError('Mật khẩu phải có ít nhất 8 ký tự')
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Mật khẩu phải chứa ít nhất 1 ký tự in hoa')
+        if not re.search(r'[0-9]', v):
+            raise ValueError('Mật khẩu phải chứa ít nhất 1 chữ số')
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError('Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt')
+        return v
+
+
+class ApproveSalesRequest(BaseModel):
+    """Admin approves or rejects sales registration"""
+    user_id: int
+    is_approved: bool
+
+
+# ============ ZONE SCHEMAS ============
+class ZoneActivityCreate(BaseModel):
+    num_customers: int
+    num_orders: int
+    avg_order_value: float
+    total_revenue: float
+    population_density: Optional[float] = None
+    business_density: Optional[float] = None
+    traffic_density: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class ZoneActivityUpdate(BaseModel):
+    num_customers: Optional[int] = None
+    num_orders: Optional[int] = None
+    avg_order_value: Optional[float] = None
+    total_revenue: Optional[float] = None
+    population_density: Optional[float] = None
+    business_density: Optional[float] = None
+    traffic_density: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class ZoneActivityResponse(BaseModel):
+    id: int
+    zone_id: int
+    num_customers: int
+    num_orders: int
+    avg_order_value: float
+    total_revenue: float
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ZoneCreate(BaseModel):
+    zone_code: str
+    district_id: int
+    name: str
+    geometry: Optional[Dict[str, Any]] = None
+    center_lat: Optional[float] = None
+    center_lng: Optional[float] = None
+    area_size: Optional[float] = None
+    num_customers: int = 0
+    num_orders: int = 0
+    revenue: float = 0.0
+
+
+class ZoneUpdate(BaseModel):
+    name: Optional[str] = None
+    geometry: Optional[Dict[str, Any]] = None
+    center_lat: Optional[float] = None
+    center_lng: Optional[float] = None
+    area_size: Optional[float] = None
+    num_customers: Optional[int] = None
+    num_orders: Optional[int] = None
+    revenue: Optional[float] = None
+
+
+class ZoneResponse(BaseModel):
+    id: int
+    zone_code: str
+    district_id: int
+    name: str
+    center_lat: Optional[float]
+    center_lng: Optional[float]
+    num_customers: int
+    num_orders: int
+    revenue: float
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ============ DISTRICT SCHEMAS ============
+class DistrictCreate(BaseModel):
+    code: str
+    name: str
+    center_lat: Optional[float] = None
+    center_lng: Optional[float] = None
+    total_area: Optional[float] = None
+
+
+class DistrictResponse(BaseModel):
+    id: int
+    code: str
+    name: str
+    center_lat: Optional[float]
+    center_lng: Optional[float]
+    total_area: Optional[float]
+    zones: List[ZoneResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+# ============ TERRITORY SCHEMAS ============
+class TerritoryCreate(BaseModel):
+    territory_code: str
+    sales_id: int
+    district_id: int
+    zone_ids: List[int]
+    algorithm_used: Optional[str] = None
+
+
+class TerritoryUpdate(BaseModel):
+    zone_ids: Optional[List[int]] = None
+    is_active: Optional[bool] = None
+
+
+class TerritoryResponse(BaseModel):
+    id: int
+    territory_code: str
+    sales_id: int
+    district_id: int
+    zone_ids: List[int]
+    num_zones: int
+    num_customers: int
+    num_orders: int
+    total_revenue: float
+    algorithm_used: Optional[str]
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ============ ALGORITHM SCHEMAS ============
+class KMeansInput(BaseModel):
+    district_id: int
+    num_clusters: int
+    max_iterations: int = 100
+
+
+class GreedySeedInput(BaseModel):
+    district_id: int
+    num_territories: int
+    max_zones_per_territory: int = 50
+
+
+class LocalSearchInput(BaseModel):
+    territory_id: int
+    swap_iterations: int = 10
+
+
+class AlgorithmResult(BaseModel):
+    territories: List[TerritoryResponse]
+    algorithm: str
+    execution_time: float
+    quality_score: float
+    message: str
+---
+File: D:/project 2\frontend\src\api.js
+---
+import axios from "axios";
+
+export const API = axios.create({
+  baseURL: "http://127.0.0.1:8000"
+});
+---
+File: D:/project 2\frontend\src\App.js
+---
+import {BrowserRouter,Routes,Route, Navigate} from "react-router-dom";
+
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import AdminDashboard from "./pages/AdminDashboard";
+import SalesDashboard from "./pages/SalesDashboard";
+import CustomerDashboard from "./pages/CustomerDashboard";
+
+// Bảo vệ route - nếu không có token thì chuyển hướng về login
+const ProtectedRoute = ({ element, requiredRole }) => {
+  const token = localStorage.getItem("token");
+  const role = localStorage.getItem("role");
+
+  if (!token) {
+    return <Navigate to="/" />;
+  }
+
+  if (requiredRole && role !== requiredRole) {
+    return <Navigate to="/" />;
+  }
+
+  return element;
+};
+
+function App(){
+  return(
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Login/>}/>
+        <Route path="/login" element={<Login/>}/>
+        <Route path="/register" element={<Register/>}/>
+        <Route path="/forgot-password" element={<ForgotPassword/>}/>
+        <Route path="/admin" element={<ProtectedRoute element={<AdminDashboard/>} requiredRole="admin" />}/>
+        <Route path="/sales" element={<ProtectedRoute element={<SalesDashboard/>} requiredRole="sales" />}/>
+        <Route path="/customer" element={<ProtectedRoute element={<CustomerDashboard/>} requiredRole="customer" />}/>
+        {/* Legacy routes para tương thích */}
+        <Route path="/shipper" element={<Navigate to="/sales" />}/>
+        <Route path="/user" element={<Navigate to="/customer" />}/>
+        <Route path="/manager" element={<Navigate to="/admin" />}/>
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;
+---
+File: D:/project 2\frontend\src\App.test.js
+---
+import { render, screen } from '@testing-library/react';
+import App from './App';
+
+test('renders learn react link', () => {
+  render(<App />);
+  const linkElement = screen.getByText(/learn react/i);
+  expect(linkElement).toBeInTheDocument();
+});
+
+---
+File: D:/project 2\frontend\src\index.js
+---
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './index.css';
+import App from './App';
+import reportWebVitals from './reportWebVitals';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+// If you want to start measuring performance in your app, pass a function
+// to log results (for example: reportWebVitals(console.log))
+// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
+reportWebVitals();
+
+---
+File: D:/project 2\frontend\src\reportWebVitals.js
+---
+const reportWebVitals = onPerfEntry => {
+  if (onPerfEntry && onPerfEntry instanceof Function) {
+    import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
+      getCLS(onPerfEntry);
+      getFID(onPerfEntry);
+      getFCP(onPerfEntry);
+      getLCP(onPerfEntry);
+      getTTFB(onPerfEntry);
+    });
+  }
+};
+
+export default reportWebVitals;
+
+---
+File: D:/project 2\frontend\src\setupTests.js
+---
+// jest-dom adds custom jest matchers for asserting on DOM nodes.
+// allows you to do things like:
+// expect(element).toHaveTextContent(/react/i)
+// learn more: https://github.com/testing-library/jest-dom
+import '@testing-library/jest-dom';
+
+---
+File: D:/project 2\frontend\src\pages\AdminDashboard.js
+---
+import { useState, useEffect, useMemo } from "react";
+import { MapContainer, TileLayer, Popup, GeoJSON, useMap, Tooltip } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import { useNavigate } from "react-router-dom";
+import "../styles/AdminDashboard.css";
+
+// --- Điều khiển Camera Map ---
+function MapController({ zones, selectedDistrict, districts, viewAll }) {
+  const map = useMap();
+  useEffect(() => {
+    if (selectedDistrict) {
+      const dist = districts.find(d => d.id === selectedDistrict);
+      if (dist && dist.center_lat) map.flyTo([dist.center_lat, dist.center_lng], 14);
+    } else if (viewAll && zones.length > 0) {
+      const bounds = zones.map(z => [z.center_lat, z.center_lng]);
+      map.fitBounds(bounds, { padding: [50, 50] });
+    }
+  }, [selectedDistrict, viewAll, zones, districts, map]);
+  return null;
+}
+
+const API_BASE = "http://localhost:8000";
+
+export default function AdminDashboard() {
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("dashboard"); // dashboard, zones, algorithms
+  const [districts, setDistricts] = useState([]);
+  const [allZones, setAllZones] = useState([]);
+  const [statistics, setStatistics] = useState({});
+  
+  // Quản lý Zones State
+  const [selectedDistrict, setSelectedDistrict] = useState(null);
+  const [viewAllZones, setViewAllZones] = useState(false);
+  const [editingZone, setEditingZone] = useState(null);
+  const [showDistrictForm, setShowDistrictForm] = useState(false);
+  const [newDistrict, setNewDistrict] = useState({ code: "", name: "", center_lat: 21.02, center_lng: 105.83 });
+
+  useEffect(() => {
+    fetchInitialData();
+  }, []);
+
+  const fetchInitialData = async () => {
+    const [dRes, zRes, sRes] = await Promise.all([
+      fetch(`${API_BASE}/districts`),
+      fetch(`${API_BASE}/zones`),
+      fetch(`${API_BASE}/admin/statistics`)
+    ]);
+    setDistricts(await dRes.json());
+    setAllZones(await zRes.json());
+    setStatistics(await sRes.json());
+  };
+
+  // --- Logic Lọc Zones ---
+  const displayedZones = useMemo(() => {
+    if (viewAllZones) return allZones;
+    return selectedDistrict ? allZones.filter(z => z.district_id === selectedDistrict) : [];
+  }, [allZones, selectedDistrict, viewAllZones]);
+
+  // --- Hành động Quản lý ---
+  const handleDeleteZone = async (id) => {
+    if (!window.confirm("Xóa Zone này?")) return;
+    await fetch(`${API_BASE}/zones/${id}`, { method: "DELETE" });
+    fetchInitialData();
+  };
+
+  const handleUpdateZone = async (e) => {
+    e.preventDefault();
+    await fetch(`${API_BASE}/zones/${editingZone.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(editingZone),
+    });
+    setEditingZone(null);
+    fetchInitialData();
+  };
+
+  const handleAddDistrict = async () => {
+    await fetch(`${API_BASE}/districts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newDistrict),
+    });
+    setShowDistrictForm(false);
+    fetchInitialData();
+  };
+
+  const getZoneColor = (id) => `hsl(${(id * 137.5) % 360}, 70%, 50%)`;
+
+  return (
+    <div className="admin-container">
+      {/* SIDEBAR CHÍNH */}
+      <aside className="admin-sidebar">
+        <div className="logo">🚀 Territory Admin</div>
+        <nav className="main-nav">
+          <button className={activeTab === "dashboard" ? "active" : ""} onClick={() => setActiveTab("dashboard")}>📊 Dashboard</button>
+          <button className={activeTab === "zones" ? "active" : ""} onClick={() => setActiveTab("zones")}>📍 Quản lý Zones</button>
+          <button className={activeTab === "algorithms" ? "active" : ""} onClick={() => setActiveTab("algorithms")}>⚙️ Chia Zones</button>
+        </nav>
+        <button className="logout-btn" onClick={() => navigate("/")}>Đăng xuất</button>
+      </aside>
+
+      <main className="admin-main">
+        {/* 1. TAB DASHBOARD */}
+        {activeTab === "dashboard" && (
+          <div className="tab-content">
+            <h2>Tổng quan hệ thống</h2>
+            <div className="stats-grid">
+              <div className="stat-card"><h3>{statistics.total_zones}</h3><p>Tổng số Zones</p></div>
+              <div className="stat-card"><h3>{statistics.total_sales}</h3><p>Nhân viên Sales</p></div>
+              <div className="stat-card"><h3>{statistics.total_revenue?.toLocaleString()}</h3><p>Doanh thu (VND)</p></div>
+              <div className="stat-card"><h3>{districts.length}</h3><p>Quận/Huyện</p></div>
+            </div>
+          </div>
+        )}
+
+        {/* 2. TAB QUẢN LÝ ZONES */}
+        {activeTab === "zones" && (
+          <div className="tab-content">
+            <div className="zone-mgr-header">
+              <h2>📍 Quản lý dữ liệu Zones</h2>
+              <button className="btn-primary" onClick={() => setShowDistrictForm(true)}>➕ Thêm Quận</button>
+            </div>
+
+            <div className="zone-mgr-layout">
+              {/* Danh sách Quận bên trái */}
+              <div className="district-list">
+                <button 
+                  className={`dist-item ${viewAllZones ? "active" : ""}`}
+                  onClick={() => { setViewAllZones(true); setSelectedDistrict(null); }}
+                >
+                  🌍 Xem toàn bộ Zones
+                </button>
+                <hr />
+                {districts.map(d => (
+                  <button 
+                    key={d.id}
+                    className={`dist-item ${selectedDistrict === d.id ? "active" : ""}`}
+                    onClick={() => { setSelectedDistrict(d.id); setViewAllZones(false); }}
+                  >
+                    🏙️ {d.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Nội dung hiển thị bên phải */}
+              <div className="zone-display">
+                <div className="map-box">
+                  <MapContainer center={[21.02, 105.83]} zoom={12} style={{ height: '400px', borderRadius: '8px' }}>
+                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    <MapController zones={displayedZones} selectedDistrict={selectedDistrict} districts={districts} viewAll={viewAllZones} />
+                    {displayedZones.map(z => (
+                      <GeoJSON key={z.id} data={z.geometry} style={{ color: getZoneColor(z.id), fillOpacity: 0.5 }}>
+                        <Tooltip permanent direction="center" className="map-label">{z.name}</Tooltip>
+                        <Popup><strong>{z.name}</strong><br/>Mã: {z.zone_code}</Popup>
+                      </GeoJSON>
+                    ))}
+                  </MapContainer>
+                </div>
+
+                {selectedDistrict && (
+                  <div className="zone-table-box">
+                    <h3>Danh sách phường/xã thuộc Quận</h3>
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>Mã</th>
+                          <th>Tên</th>
+                          <th>Khách hàng</th>
+                          <th>Đơn hàng</th>
+                          <th>Doanh thu</th>
+                          <th>Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {displayedZones.map(z => (
+                          <tr key={z.id}>
+                            <td>{z.zone_code}</td>
+                            <td>{z.name}</td>
+                            <td>{z.num_customers}</td>
+                            <td>{z.num_orders}</td>
+                            <td>{z.revenue.toLocaleString()}</td>
+                            <td>
+                              <button className="btn-sm-edit" onClick={() => setEditingZone(z)}>✏️</button>
+                              <button className="btn-sm-delete" onClick={() => handleDeleteZone(z.id)}>🗑️</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 3. TAB CHIA ZONES (ALGORITHMS) */}
+        {activeTab === "algorithms" && (
+          <div className="tab-content">
+            <h2>⚙️ Chia phân vùng (Territory Design)</h2>
+            <p>Sử dụng các thuật toán để tối ưu hóa việc phân chia khu vực cho nhân viên sales.</p>
+            <div className="algo-grid">
+              <div className="algo-card">
+                <h3>K-Means Clustering</h3>
+                <p>Phân chia dựa trên vị trí địa lý (Khoảng cách chim bay).</p>
+                <button className="btn-primary">Bắt đầu chia</button>
+              </div>
+              <div className="algo-card">
+                <h3>Greedy Seed Growth</h3>
+                <p>Phân chia dựa trên cân bằng tải (Số khách hàng/Doanh thu).</p>
+                <button className="btn-primary">Bắt đầu chia</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* MODAL SỬA ZONE */}
+      {editingZone && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Chỉnh sửa thông tin Zone</h3>
+            <form onSubmit={handleUpdateZone}>
+              <label>Số khách hàng:</label>
+              <input type="number" value={editingZone.num_customers} onChange={e => setEditingZone({...editingZone, num_customers: e.target.value})} />
+              <label>Số đơn hàng:</label>
+              <input type="number" value={editingZone.num_orders} onChange={e => setEditingZone({...editingZone, num_orders: e.target.value})} />
+              <label>Doanh thu:</label>
+              <input type="number" value={editingZone.revenue} onChange={e => setEditingZone({...editingZone, revenue: e.target.value})} />
+              <div className="modal-btns">
+                <button type="submit" className="btn-success">Lưu</button>
+                <button type="button" onClick={() => setEditingZone(null)}>Hủy</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL THÊM QUẬN */}
+      {showDistrictForm && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Thêm Quận/Huyện mới</h3>
+            <input type="text" placeholder="Mã Quận (VD: CG)" onChange={e => setNewDistrict({...newDistrict, code: e.target.value})} />
+            <input type="text" placeholder="Tên Quận (VD: Cầu Giấy)" onChange={e => setNewDistrict({...newDistrict, name: e.target.value})} />
+            <div className="modal-btns">
+              <button className="btn-success" onClick={handleAddDistrict}>Thêm</button>
+              <button onClick={() => setShowDistrictForm(false)}>Hủy</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+---
+File: D:/project 2\frontend\src\pages\CustomerDashboard.js
+---
+import { useState, useEffect } from "react";
+import "../styles/Dashboard.css";
+
+const API_BASE = "http://localhost:8000";
+
+export default function CustomerDashboard() {
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const customerId = localStorage.getItem("user_id");
+
+  useEffect(() => {
+    // Tải thông tin người dùng từ localStorage
+    const userInfo = JSON.parse(localStorage.getItem("user_info") || "{}");
+    setUserData(userInfo);
+    setLoading(false);
+  }, []);
+
+  if (loading) {
+    return <div className="loading">Đang tải dữ liệu...</div>;
+  }
+
+  return (
+    <div className="dashboard-container">
+      <header className="dashboard-header">
+        <div className="header-content">
+          <h1>Dashboard - Khách Hàng</h1>
+          <div className="header-info">
+            <span className="user-info">👤 Khách Hàng - {userData?.full_name || "Khách"}</span>
+            <button className="logout-btn" onClick={() => {
+              localStorage.removeItem("token");
+              localStorage.removeItem("user_id");
+              localStorage.removeItem("user_info");
+              window.location.href = "/login";
+            }}>
+              Đăng xuất
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="dashboard-wrapper">
+        <aside className="sidebar">
+          <nav className="nav-menu">
+            <button
+              className={`nav-item ${activeTab === "dashboard" ? "active" : ""}`}
+              onClick={() => setActiveTab("dashboard")}
+            >
+              📊 Dashboard
+            </button>
+            <button
+              className={`nav-item ${activeTab === "profile" ? "active" : ""}`}
+              onClick={() => setActiveTab("profile")}
+            >
+              👤 Hồ Sơ Cá Nhân
+            </button>
+            <button
+              className={`nav-item ${activeTab === "orders" ? "active" : ""}`}
+              onClick={() => setActiveTab("orders")}
+            >
+              📦 Đơn Hàng
+            </button>
+            <button
+              className={`nav-item ${activeTab === "sales-rep" ? "active" : ""}`}
+              onClick={() => setActiveTab("sales-rep")}
+            >
+              👔 Sales Đảm Nhiệm
+            </button>
+          </nav>
+        </aside>
+
+        <main className="main-content">
+          {/* Dashboard Tab */}
+          {activeTab === "dashboard" && (
+            <div className="content-section">
+              <h2>Thông Tin Khách Hàng</h2>
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <div className="stat-icon">🆔</div>
+                  <div className="stat-info">
+                    <h3>Mã Khách Hàng</h3>
+                    <p className="stat-number">#{customerId}</p>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-icon">📧</div>
+                  <div className="stat-info">
+                    <h3>Email</h3>
+                    <p className="stat-number" style={{ fontSize: "14px" }}>{userData?.email || "N/A"}</p>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-icon">📞</div>
+                  <div className="stat-info">
+                    <h3>Điện Thoại</h3>
+                    <p className="stat-number" style={{ fontSize: "14px" }}>{userData?.phone || "N/A"}</p>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-icon">✅</div>
+                  <div className="stat-info">
+                    <h3>Trạng Thái</h3>
+                    <p className="stat-number" style={{ fontSize: "14px", color: "#4caf50" }}>Hoạt Động</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="info-section">
+                <h3>Chào Mừng Bạn!</h3>
+                <p>
+                  Bạn đang sử dụng hệ thống quản lý territory design. 
+                  Hãy kiểm tra thông tin sales person được giao cho khu vực của bạn, 
+                  hoặc xem lịch sử đơn hàng của mình.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Profile Tab */}
+          {activeTab === "profile" && (
+            <div className="content-section">
+              <h2>Hồ Sơ Cá Nhân</h2>
+              <div className="profile-card">
+                <div className="profile-item">
+                  <label>Tên Đầy Đủ:</label>
+                  <p>{userData?.full_name || "Chưa cập nhật"}</p>
+                </div>
+                <div className="profile-item">
+                  <label>Email:</label>
+                  <p>{userData?.email || "Chưa cập nhật"}</p>
+                </div>
+                <div className="profile-item">
+                  <label>Số Điện Thoại:</label>
+                  <p>{userData?.phone || "Chưa cập nhật"}</p>
+                </div>
+                <div className="profile-item">
+                  <label>Vai Trò:</label>
+                  <p>
+                    <span className="badge">Khách Hàng</span>
+                  </p>
+                </div>
+                <div className="profile-item">
+                  <label>Ngày Đăng Ký:</label>
+                  <p>{userData?.created_at ? new Date(userData.created_at).toLocaleDateString("vi-VN") : "N/A"}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Orders Tab */}
+          {activeTab === "orders" && (
+            <div className="content-section">
+              <h2>Lịch Sử Đơn Hàng</h2>
+              <p className="info-text">
+                Tính năng xem đơn hàng sẽ được tích hợp trong phiên bản tiếp theo của ứng dụng.
+              </p>
+              <div className="placeholder-section">
+                <p>🚧 Đơn Hàng (Đang Phát Triển)</p>
+              </div>
+            </div>
+          )}
+
+          {/* Sales Rep Tab */}
+          {activeTab === "sales-rep" && (
+            <div className="content-section">
+              <h2>Sales Person Đảm Nhiệm Khu Vực Của Tôi</h2>
+              <p className="info-text">
+                Thông tin về sales person được giao cho khu vực của bạn:
+              </p>
+              <div className="sales-rep-card">
+                <div className="rep-item">
+                  <label>Tên Sales:</label>
+                  <p className="rep-info">Sẽ được cập nhật dựa trên vị trí của bạn</p>
+                </div>
+                <div className="rep-item">
+                  <label>Email:</label>
+                  <p className="rep-info">Sẽ được cập nhật dựa trên vị trí của bạn</p>
+                </div>
+                <div className="rep-item">
+                  <label>Điện Thoại:</label>
+                  <p className="rep-info">Sẽ được cập nhật dựa trên vị trí của bạn</p>
+                </div>
+                <div className="rep-item">
+                  <label>Khu Vực Đảm Nhiệm:</label>
+                  <p className="rep-info">Sẽ được cập nhật dựa trên vị trí của bạn</p>
+                </div>
+              </div>
+              <p className="note">
+                ℹ️ Hệ thống sẽ tự động xác định sales person phụ trách khu vực của bạn dựa trên vị trí địa lý.
+              </p>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+---
+File: D:/project 2\frontend\src\pages\ForgotPassword.js
+---
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import "../styles/Auth.css";
+
+export default function ForgotPassword() {
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
+    // This is a placeholder - in production, you'd call your API
+    try {
+      // await API.post("/forgot-password", { email });
+      setSuccess("Kiểm tra email của bạn để nhận hướng dẫn khôi phục mật khẩu!");
+      setTimeout(() => {
+        navigate("/");
+      }, 3000);
+    } catch (err) {
+      setError("Đã có lỗi xảy ra. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-container">
+      <div className="auth-background"></div>
+
+      <div className="auth-wrapper">
+        <div className="auth-card">
+          <div className="auth-header">
+            <h1>🚀 Hệ thống Vận chuyển</h1>
+            <p>Khôi phục mật khẩu</p>
+          </div>
+
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <h2>Quên Mật khẩu?</h2>
+
+            <p style={{ color: "#666", marginBottom: "20px", fontSize: "14px" }}>
+              Nhập địa chỉ email của bạn và chúng tôi sẽ gửi hướng dẫn để đặt lại mật khẩu.
+            </p>
+
+            {error && <div className="error-message">{error}</div>}
+            {success && <div className="success-message">{success}</div>}
+
+            <div className="form-group">
+              <label htmlFor="email">Email</label>
+              <input
+                id="email"
+                type="email"
+                placeholder="Nhập địa chỉ email của bạn"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+
+            <button 
+              type="submit" 
+              className="btn-login"
+              disabled={loading}
+            >
+              {loading ? "Đang xử lý..." : "Gửi hướng dẫn khôi phục"}
+            </button>
+          </form>
+
+          <div className="auth-footer">
+            <p>
+              Quay lại{" "}
+              <Link to="/" className="register-link">
+                Đăng nhập
+              </Link>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+---
+File: D:/project 2\frontend\src\pages\Login.js
+---
+import { useState } from "react";
+import { API } from "../api";
+import { useNavigate, Link } from "react-router-dom";
+import "../styles/Auth.css";
+
+export default function Login() {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
+
+  const login = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await API.post("/login", {
+        username,
+        password,
+      });
+
+      // Lưu token, role và user ID
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("role", res.data.role);
+      localStorage.setItem("user_id", res.data.id);
+
+      // Route dựa trên role
+      if (res.data.role === "admin") {
+        navigate("/admin");
+      } else if (res.data.role === "sales") {
+        navigate("/sales");
+      } else if (res.data.role === "customer") {
+        navigate("/customer");
+      } else {
+        // Fallback để tương thích với các role cũ
+        navigate("/login");
+      }
+    } catch (err) {
+      setError(err.response?.data?.detail || "Đăng nhập thất bại. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-container">
+      <div className="auth-background"></div>
+      
+      <div className="auth-wrapper">
+        <div className="auth-card">
+          <div className="auth-header">
+            <h1>🚀 Hệ thống Vận chuyển</h1>
+            <p>Quản lý Giao hàng Thông minh</p>
+          </div>
+
+          <form className="auth-form" onSubmit={login}>
+            <h2>Đăng nhập</h2>
+
+            {error && <div className="error-message">{error}</div>}
+
+            <div className="form-group">
+              <label htmlFor="username">Tên đăng nhập hoặc Email</label>
+              <input
+                id="username"
+                type="text"
+                placeholder="Nhập tên đăng nhập hoặc email"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="password">Mật khẩu</label>
+              <input
+                id="password"
+                type="password"
+                placeholder="Nhập mật khẩu"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="form-options">
+              <Link to="/forgot-password" className="forgot-password">
+                Quên mật khẩu?
+              </Link>
+            </div>
+
+            <button 
+              type="submit" 
+              className="btn-login"
+              disabled={loading}
+            >
+              {loading ? "Đang xử lý..." : "Đăng nhập"}
+            </button>
+          </form>
+
+          <div className="auth-footer">
+            <p>
+              Chưa có tài khoản?{" "}
+              <Link to="/register" className="register-link">
+                Đăng ký ngay
+              </Link>
+            </p>
+          </div>
+
+          <div className="auth-info">
+            <p className="info-title">Demo Accounts:</p>
+            <div className="demo-accounts">
+              <div className="demo-item">
+                <strong>Admin:</strong> admin1 / Admin123!
+              </div>
+              <div className="demo-item">
+                <strong>Sales (Auto-approved):</strong> sales1 / Sales123!
+              </div>
+              <div className="demo-item">
+                <strong>Customer (Auto-approved):</strong> customer1 / Customer123!
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+---
+File: D:/project 2\frontend\src\pages\Register.js
+---
+import { useState } from "react";
+import { API } from "../api";
+import { useNavigate, Link } from "react-router-dom";
+import "../styles/Auth.css";
+
+export default function Register() {
+  const [formData, setFormData] = useState({
+    username: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    full_name: "",
+    phone: "",
+    role: "customer",
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [passwordValidation, setPasswordValidation] = useState({
+    length: false,
+    uppercase: false,
+    number: false,
+    special: false,
+  });
+  const navigate = useNavigate();
+
+  // Kiểm tra mật khẩu theo các tiêu chí
+  const validatePassword = (pwd) => {
+    const validation = {
+      length: pwd.length >= 8,
+      uppercase: /[A-Z]/.test(pwd),
+      number: /[0-9]/.test(pwd),
+      special: /[!@#$%^&*(),.?":{}|<>]/.test(pwd),
+    };
+    setPasswordValidation(validation);
+    return Object.values(validation).every(v => v === true);
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    if (name === "password") {
+      validatePassword(value);
+    }
+    setFormData({
+      ...formData,
+      [name]: value,
+    });
+  };
+
+  const register = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    // Validation
+    if (!formData.username.trim()) {
+      setError("Vui lòng nhập tên đăng nhập!");
+      return;
+    }
+
+    if (!formData.email.trim()) {
+      setError("Vui lòng nhập email!");
+      return;
+    }
+
+    // Kiểm tra định dạng email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError("Vui lòng nhập email hợp lệ!");
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError("Mật khẩu không khớp!");
+      return;
+    }
+
+    // Kiểm tra mật khẩu đáp ứng các tiêu chí
+    if (!validatePassword(formData.password)) {
+      setError("Mật khẩu phải có ít nhất 8 ký tự, chứa 1 ký tự in hoa, 1 chữ số và 1 ký tự đặc biệt!");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await API.post("/register", {
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role,
+        full_name: formData.full_name,
+        phone: formData.phone,
+      });
+
+      const successMsg = response.data?.msg || "Đăng ký thành công!";
+      setSuccess(successMsg + " Bạn sẽ được chuyển hướng đến trang đăng nhập...");
+      
+      setTimeout(() => {
+        navigate("/");
+      }, 2000);
+    } catch (err) {
+      setError(err.response?.data?.detail || "Đăng ký thất bại. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-container">
+      <div className="auth-background"></div>
+
+      <div className="auth-wrapper">
+        <div className="auth-card auth-card-register">
+          <div className="auth-header">
+            <h1>🚀 Hệ thống Vận chuyển</h1>
+            <p>Tạo tài khoản mới</p>
+          </div>
+
+          <form className="auth-form" onSubmit={register}>
+            <h2>Đăng ký</h2>
+
+            {error && <div className="error-message">{error}</div>}
+            {success && <div className="success-message">{success}</div>}
+
+            <div className="form-group">
+              <label htmlFor="username">Tên đăng nhập</label>
+              <input
+                id="username"
+                type="text"
+                name="username"
+                placeholder="Nhập tên đăng nhập"
+                value={formData.username}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="email">Email</label>
+              <input
+                id="email"
+                type="email"
+                name="email"
+                placeholder="Nhập địa chỉ email"
+                value={formData.email}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="role">Vai trò</label>
+              <select 
+                id="role"
+                name="role" 
+                value={formData.role} 
+                onChange={handleChange}
+              >
+                <option value="customer">Khách Hàng</option>
+                <option value="sales">Sales Person</option>
+              </select>
+              <div className="role-info">
+                {formData.role === 'customer' && (
+                  <p style={{ color: '#27ae60', fontSize: '12px', marginTop: '5px' }}>
+                    ✓ Tài khoản khách hàng được tự động duyệt, bạn có thể đăng nhập ngay sau khi đăng ký.
+                  </p>
+                )}
+                {formData.role === 'sales' && (
+                  <p style={{ color: '#f39c12', fontSize: '12px', marginTop: '5px' }}>
+                    ⏳ Tài khoản sales cần được admin duyệt trước khi có thể đăng nhập. Vui lòng chờ.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="password">Mật khẩu</label>
+              <input
+                id="password"
+                type="password"
+                name="password"
+                placeholder="Nhập mật khẩu"
+                value={formData.password}
+                onChange={handleChange}
+                required
+              />
+              
+              {formData.password && (
+                <div className="password-validation">
+                  <div className={`validation-item ${passwordValidation.length ? 'valid' : 'invalid'}`}>
+                    {passwordValidation.length ? '✓' : '✗'} Ít nhất 8 ký tự
+                  </div>
+                  <div className={`validation-item ${passwordValidation.uppercase ? 'valid' : 'invalid'}`}>
+                    {passwordValidation.uppercase ? '✓' : '✗'} 1 ký tự in hoa
+                  </div>
+                  <div className={`validation-item ${passwordValidation.number ? 'valid' : 'invalid'}`}>
+                    {passwordValidation.number ? '✓' : '✗'} 1 chữ số
+                  </div>
+                  <div className={`validation-item ${passwordValidation.special ? 'valid' : 'invalid'}`}>
+                    {passwordValidation.special ? '✓' : '✗'} 1 ký tự đặc biệt (!@#$%^&*...)
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="confirmPassword">Xác nhận mật khẩu</label>
+              <input
+                id="confirmPassword"
+                type="password"
+                name="confirmPassword"
+                placeholder="Nhập lại mật khẩu"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <button 
+              type="submit" 
+              className="btn-login"
+              disabled={loading}
+            >
+              {loading ? "Đang xử lý..." : "Đăng ký"}
+            </button>
+          </form>
+
+          <div className="auth-footer">
+            <p>
+              Đã có tài khoản?{" "}
+              <Link to="/" className="register-link">
+                Đăng nhập tại đây
+              </Link>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+---
+File: D:/project 2\frontend\src\pages\SalesDashboard.js
+---
+import { useState, useEffect } from "react";
+import "../styles/Dashboard.css";
+
+const API_BASE = "http://localhost:8000";
+
+export default function SalesDashboard() {
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [salesData, setSalesData] = useState(null);
+  const [territories, setTerritories] = useState([]);
+  const [selectedTerritory, setSelectedTerritory] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const salesId = localStorage.getItem("user_id"); // Lấy user ID từ localStorage
+
+  useEffect(() => {
+    fetchSalesDashboard();
+  }, []);
+
+  const fetchSalesDashboard = async () => {
+    try {
+      if (!salesId) return;
+      
+      const res = await fetch(`${API_BASE}/sales/${salesId}/dashboard`);
+      const data = await res.json();
+      setSalesData(data);
+      setTerritories(data.territories || []);
+      setLoading(false);
+    } catch (err) {
+      console.error(err);
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="loading">Đang tải dữ liệu...</div>;
+  }
+
+  return (
+    <div className="dashboard-container">
+      <header className="dashboard-header">
+        <div className="header-content">
+          <h1>Dashboard - Sales Person</h1>
+          <div className="header-info">
+            <span className="user-info">👤 Sales</span>
+            <button className="logout-btn" onClick={() => {
+              localStorage.removeItem("token");
+              localStorage.removeItem("user_id");
+              window.location.href = "/login";
+            }}>
+              Đăng xuất
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="dashboard-wrapper">
+        <aside className="sidebar">
+          <nav className="nav-menu">
+            <button
+              className={`nav-item ${activeTab === "dashboard" ? "active" : ""}`}
+              onClick={() => setActiveTab("dashboard")}
+            >
+              📊 Dashboard
+            </button>
+            <button
+              className={`nav-item ${activeTab === "territories" ? "active" : ""}`}
+              onClick={() => setActiveTab("territories")}
+            >
+              🗺️ Phân Vùng Của Tôi
+            </button>
+            <button
+              className={`nav-item ${activeTab === "stats" ? "active" : ""}`}
+              onClick={() => setActiveTab("stats")}
+            >
+              📈 Thống Kê
+            </button>
+          </nav>
+        </aside>
+
+        <main className="main-content">
+          {/* Dashboard Tab */}
+          {activeTab === "dashboard" && (
+            <div className="content-section">
+              <h2>Tổng Quan Phân Vùng Của Tôi</h2>
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <div className="stat-icon">🗺️</div>
+                  <div className="stat-info">
+                    <h3>Số Phân Vùng</h3>
+                    <p className="stat-number">{salesData?.num_territories || 0}</p>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-icon">📍</div>
+                  <div className="stat-info">
+                    <h3>Tổng Zones</h3>
+                    <p className="stat-number">{salesData?.total_zones || 0}</p>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-icon">👥</div>
+                  <div className="stat-info">
+                    <h3>Khách Hàng</h3>
+                    <p className="stat-number">{salesData?.total_customers || 0}</p>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-icon">📦</div>
+                  <div className="stat-info">
+                    <h3>Đơn Hàng</h3>
+                    <p className="stat-number">{salesData?.total_orders || 0}</p>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-icon">💰</div>
+                  <div className="stat-info">
+                    <h3>Doanh Thu</h3>
+                    <p className="stat-number">${(salesData?.total_revenue || 0).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="info-section">
+                <h3>Hướng Dẫn</h3>
+                <ul>
+                  <li>Xem danh sách các phân vùng được giao cho bạn trong tab "Phân Vùng Của Tôi"</li>
+                  <li>Mỗi phân vùng chứa một số zones (đơn vị cơ bản)</li>
+                  <li>Xem số lượng khách hàng, đơn hàng và doanh thu cho mỗi phân vùng</li>
+                  <li>Liên hệ Admin nếu cần điều chỉnh phân vùng</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* Territories Tab */}
+          {activeTab === "territories" && (
+            <div className="content-section">
+              <h2>Phân Vùng Được Giao Cho Tôi</h2>
+              
+              {territories.length === 0 ? (
+                <p className="no-data">Bạn chưa được giao phân vùng nào</p>
+              ) : (
+                <>
+                  <div className="territories-list">
+                    {territories.map((territory) => (
+                      <div
+                        key={territory.id}
+                        className={`territory-card ${selectedTerritory?.id === territory.id ? "active" : ""}`}
+                        onClick={() => setSelectedTerritory(territory)}
+                      >
+                        <div className="territory-header">
+                          <h3>{territory.territory_code}</h3>
+                          <span className="badge">{territory.num_zones} Zones</span>
+                        </div>
+                        <div className="territory-stats">
+                          <div className="stat-item">
+                            <span>Khách Hàng:</span>
+                            <strong>{territory.num_customers}</strong>
+                          </div>
+                          <div className="stat-item">
+                            <span>Đơn Hàng:</span>
+                            <strong>{territory.num_orders}</strong>
+                          </div>
+                          <div className="stat-item">
+                            <span>Doanh Thu:</span>
+                            <strong>${territory.total_revenue.toLocaleString()}</strong>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {selectedTerritory && (
+                    <div className="territory-details">
+                      <h3>Chi Tiết Phân Vùng: {selectedTerritory.territory_code}</h3>
+                      <table className="details-table">
+                        <tr>
+                          <td>Mã Phân Vùng:</td>
+                          <td>{selectedTerritory.territory_code}</td>
+                        </tr>
+                        <tr>
+                          <td>Số Zones:</td>
+                          <td>{selectedTerritory.num_zones}</td>
+                        </tr>
+                        <tr>
+                          <td>Zone IDs:</td>
+                          <td>{selectedTerritory.zone_ids?.join(", ") || "N/A"}</td>
+                        </tr>
+                        <tr>
+                          <td>Tổng Khách Hàng:</td>
+                          <td>{selectedTerritory.num_customers}</td>
+                        </tr>
+                        <tr>
+                          <td>Tổng Đơn Hàng:</td>
+                          <td>{selectedTerritory.num_orders}</td>
+                        </tr>
+                        <tr>
+                          <td>Tổng Doanh Thu:</td>
+                          <td>${selectedTerritory.total_revenue.toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                          <td>Thuật Toán Sử Dụng:</td>
+                          <td>{selectedTerritory.algorithm_used || "Manual"}</td>
+                        </tr>
+                        <tr>
+                          <td>Trạng Thái:</td>
+                          <td>
+                            <span className={selectedTerritory.is_active ? "status-active" : "status-inactive"}>
+                              {selectedTerritory.is_active ? "Đang Hoạt Động" : "Không Hoạt Động"}
+                            </span>
+                          </td>
+                        </tr>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Statistics Tab */}
+          {activeTab === "stats" && (
+            <div className="content-section">
+              <h2>Thống Kê Phân Vùng</h2>
+              
+              {territories.length === 0 ? (
+                <p className="no-data">Không có dữ liệu thống kê</p>
+              ) : (
+                <div className="stats-section">
+                  <div className="stats-chart">
+                    <h3>Phân Bố Khách Hàng</h3>
+                    <div className="chart-placeholder">
+                      {territories.map((t) => (
+                        <div key={t.id} className="chart-bar">
+                          <label>{t.territory_code}</label>
+                          <div className="bar" style={{
+                            height: `${(t.num_customers / Math.max(...territories.map(x => x.num_customers), 1)) * 200}px`,
+                            backgroundColor: "#667eea"
+                          }}></div>
+                          <span>{t.num_customers}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="stats-table">
+                    <h3>Chi Tiết Phân Vùng</h3>
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Phân Vùng</th>
+                          <th>Zones</th>
+                          <th>Khách Hàng</th>
+                          <th>Đơn Hàng</th>
+                          <th>Doanh Thu</th>
+                          <th>Tỷ Lệ %</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {territories.map((t) => (
+                          <tr key={t.id}>
+                            <td>{t.territory_code}</td>
+                            <td>{t.num_zones}</td>
+                            <td>{t.num_customers}</td>
+                            <td>{t.num_orders}</td>
+                            <td>${t.total_revenue.toLocaleString()}</td>
+                            <td>{((t.total_revenue / (salesData?.total_revenue || 1)) * 100).toFixed(1)}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+---
+File: D:/project 2\frontend\src\pages\UserDashboard.js
+---
+import { useState } from "react";
+import "../styles/Dashboard.css";
+
+export default function UserDashboard() {
+  const [activeTab, setActiveTab] = useState("dashboard");
+
+  const [orders, setOrders] = useState([
+    { id: 1, product: "Sản phẩm A", date: "2026-03-10", amount: 500000, status: "Hoàn thành", shipper: "Nguyễn Văn C" },
+    { id: 2, product: "Sản phẩm B", date: "2026-03-09", amount: 150000, status: "Hoàn thành", shipper: "Lê Văn D" },
+    { id: 3, product: "Sản phẩm C", date: "2026-03-11", amount: 300000, status: "Chưa giao", shipper: "Nguyễn Văn C" },
+    { id: 4, product: "Sản phẩm D", date: "2026-03-08", amount: 200000, status: "Hoàn thành", shipper: "Trần Văn E" },
+  ]);
+
+  const pendingOrders = orders.filter(o => o.status === "Chưa giao");
+  const completedOrders = orders.filter(o => o.status === "Hoàn thành");
+
+  return (
+    <div className="dashboard-container">
+      <header className="dashboard-header">
+        <div className="header-content">
+          <h1>Dashboard Người dùng</h1>
+          <div className="header-info">
+            <span className="user-info">👤 User</span>
+            <button className="logout-btn">Đăng xuất</button>
+          </div>
+        </div>
+      </header>
+
+      <div className="dashboard-wrapper">
+        <aside className="sidebar">
+          <nav className="nav-menu">
+            <button
+              className={`nav-item ${activeTab === "dashboard" ? "active" : ""}`}
+              onClick={() => setActiveTab("dashboard")}
+            >
+              📊 Dashboard
+            </button>
+            <button
+              className={`nav-item ${activeTab === "pending" ? "active" : ""}`}
+              onClick={() => setActiveTab("pending")}
+            >
+              ⏳ Đơn hàng Chưa giao
+            </button>
+            <button
+              className={`nav-item ${activeTab === "history" ? "active" : ""}`}
+              onClick={() => setActiveTab("history")}
+            >
+              📜 Lịch sử Đơn hàng
+            </button>
+          </nav>
+        </aside>
+
+        <main className="main-content">
+          {/* Dashboard Tab */}
+          {activeTab === "dashboard" && (
+            <div className="content-section">
+              <h2>Tổng quan Đơn hàng của bạn</h2>
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <div className="stat-icon">📦</div>
+                  <div className="stat-info">
+                    <h3>Tổng Đơn hàng</h3>
+                    <p className="stat-number">{orders.length}</p>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-icon">✅</div>
+                  <div className="stat-info">
+                    <h3>Hoàn thành</h3>
+                    <p className="stat-number">{completedOrders.length}</p>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-icon">⏳</div>
+                  <div className="stat-info">
+                    <h3>Chưa giao</h3>
+                    <p className="stat-number">{pendingOrders.length}</p>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-icon">💰</div>
+                  <div className="stat-info">
+                    <h3>Tổng chi tiêu</h3>
+                    <p className="stat-number">{orders.reduce((sum, o) => sum + o.amount, 0).toLocaleString()} ₫</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="dashboard-charts">
+                <div className="chart-container">
+                  <h3>Đơn hàng gần đây</h3>
+                  {orders.slice(0, 5).map(order => (
+                    <div key={order.id} className="order-summary">
+                      <div className="order-summary-info">
+                        <strong>{order.product}</strong>
+                        <p>{order.date}</p>
+                      </div>
+                      <div className="order-summary-amount">
+                        {order.amount.toLocaleString()} ₫
+                      </div>
+                      <div className="order-summary-status">
+                        <span className={`status-badge status-${order.status.toLowerCase().replace(" ", "-")}`}>
+                          {order.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Pending Orders Tab */}
+          {activeTab === "pending" && (
+            <div className="content-section">
+              <div className="section-header">
+                <h2>Đơn hàng Chưa giao</h2>
+              </div>
+
+              {pendingOrders.length === 0 ? (
+                <div className="empty-state">
+                  <p>📭 Không có đơn hàng chưa giao</p>
+                </div>
+              ) : (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Sản phẩm</th>
+                      <th>Ngày đặt</th>
+                      <th>Giá</th>
+                      <th>Shipper</th>
+                      <th>Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingOrders.map(order => (
+                      <tr key={order.id}>
+                        <td>{order.id}</td>
+                        <td>{order.product}</td>
+                        <td>{order.date}</td>
+                        <td>{order.amount.toLocaleString()} ₫</td>
+                        <td>{order.shipper}</td>
+                        <td>
+                          <span className="status-badge status-chưa-giao">
+                            {order.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {/* Order History Tab */}
+          {activeTab === "history" && (
+            <div className="content-section">
+              <div className="section-header">
+                <h2>Lịch sử Đơn hàng</h2>
+              </div>
+
+              {orders.length === 0 ? (
+                <div className="empty-state">
+                  <p>📚 Không có lịch sử đơn hàng</p>
+                </div>
+              ) : (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Sản phẩm</th>
+                      <th>Ngày đặt</th>
+                      <th>Giá</th>
+                      <th>Shipper</th>
+                      <th>Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.map(order => (
+                      <tr key={order.id}>
+                        <td>{order.id}</td>
+                        <td>{order.product}</td>
+                        <td>{order.date}</td>
+                        <td>{order.amount.toLocaleString()} ₫</td>
+                        <td>{order.shipper}</td>
+                        <td>
+                          <span className={`status-badge status-${order.status.toLowerCase().replace(" ", "-")}`}>
+                            {order.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
