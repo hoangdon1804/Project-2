@@ -43,6 +43,7 @@ class UserResponse(BaseModel):
     role: str
     full_name: Optional[str]
     phone: Optional[str]
+    region_id: Optional[int] = None
     created_at: datetime
 
     class Config:
@@ -56,6 +57,7 @@ class AdminCreateSales(BaseModel):
     password: str
     full_name: Optional[str] = None
     phone: Optional[str] = None
+    region_id: Optional[int] = None  # Khu vực cho sales
 
     @validator('password')
     def validate_password(cls, v):
@@ -68,6 +70,14 @@ class AdminCreateSales(BaseModel):
         if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
             raise ValueError('Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt')
         return v
+
+
+class AdminUpdateSales(BaseModel):
+    """Admin updates an existing sales account"""
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    region_id: Optional[int] = None
 
 
 class AdminCreateAdmin(BaseModel):
@@ -95,6 +105,41 @@ class ApproveSalesRequest(BaseModel):
     """Admin approves or rejects sales registration"""
     user_id: int
     is_approved: bool
+
+
+# ============ REGION SCHEMAS ============
+class RegionCreate(BaseModel):
+    name: str  # Tên khu vực (Hà Nội, TP HCM, ...)
+
+
+class RegionUpdate(BaseModel):
+    name: Optional[str] = None
+
+
+class RegionResponse(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RegionDetailResponse(BaseModel):
+    id: int
+    name: str
+    territories: List["TerritoryDetailResponse"] = []
+    sales_users: List[UserResponse] = []
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AssignRegionToSalesRequest(BaseModel):
+    sales_id: int
+    region_id: Optional[int] = None  # None để xóa khu vực
 
 
 # ============ ZONE SCHEMAS ============
@@ -135,7 +180,7 @@ class ZoneActivityResponse(BaseModel):
 
 class ZoneCreate(BaseModel):
     zone_code: str
-    district_id: int
+    territory_id: int
     name: str
     geometry: Optional[Dict[str, Any]] = None
     center_lat: Optional[float] = None
@@ -160,7 +205,7 @@ class ZoneUpdate(BaseModel):
 class ZoneResponse(BaseModel):
     id: int
     zone_code: str
-    district_id: int
+    territory_id: int
     name: str
     center_lat: Optional[float]
     center_lng: Optional[float]
@@ -171,6 +216,13 @@ class ZoneResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ZoneMetricsUpdate(BaseModel):
+    num_customers: int
+    num_orders: int
+    revenue: float
+    notes: Optional[str] = None
 
 
 # ============ DISTRICT SCHEMAS ============
@@ -197,45 +249,59 @@ class DistrictResponse(BaseModel):
 
 # ============ TERRITORY SCHEMAS ============
 class TerritoryCreate(BaseModel):
-    territory_code: str
-    sales_id: int
-    district_id: int
+    name: str
+    region_id: int  # Khu vực cho phân vùng
     zone_ids: List[int]
-    algorithm_used: Optional[str] = None
+
+    source_territory_ids: List[int] = []
 
 
 class TerritoryUpdate(BaseModel):
+    name: Optional[str] = None
+    region_id: Optional[int] = None
     zone_ids: Optional[List[int]] = None
     is_active: Optional[bool] = None
 
 
 class TerritoryResponse(BaseModel):
     id: int
-    territory_code: str
-    sales_id: int
-    district_id: int
+    name: str
+    region_id: Optional[int] = None
+    parent_territory_id: Optional[int] = None
+    version_no: int = 1
     zone_ids: List[int]
-    num_zones: int
-    num_customers: int
-    num_orders: int
-    total_revenue: float
-    algorithm_used: Optional[str]
-    is_active: bool
     created_at: datetime
 
     class Config:
         from_attributes = True
 
 
+class TerritoryDetailResponse(BaseModel):
+    id: int
+    name: str
+    region_id: int
+    parent_territory_id: Optional[int] = None
+    version_no: int = 1
+    zone_ids: List[int]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TerritoryVersionCreate(BaseModel):
+    name: Optional[str] = None
+
+
 # ============ ALGORITHM SCHEMAS ============
 class KMeansInput(BaseModel):
-    district_id: int
+    territory_id: int
     num_clusters: int
     max_iterations: int = 100
 
 
 class GreedySeedInput(BaseModel):
-    district_id: int
+    territory_id: int
     num_territories: int
     max_zones_per_territory: int = 50
 
@@ -251,3 +317,33 @@ class AlgorithmResult(BaseModel):
     execution_time: float
     quality_score: float
     message: str
+
+
+# ============ WORK ASSIGNMENT SCHEMAS ============
+class AssignWorkRequest(BaseModel):
+    """Request to assign work using algorithm"""
+    territory_id: int
+    sales_ids: List[int]
+    date: str  # YYYY-MM-DD
+    algorithm: str  # local_search, tabu_search, grasp
+
+
+class WorkAssignmentResponse(BaseModel):
+    """Response from work assignment"""
+    assignment: Dict[int, List[int]]  # {sales_id: [zone_ids], ...}
+    cv_pct: float
+    total_distance: float
+    hoover_index: float
+    algorithm: str
+
+
+class SaveAssignmentRequest(BaseModel):
+    """Request to save/finalize assignment"""
+    territory_id: int
+    date: str
+    algorithm: str = "manual_adjusted"
+    cv_pct: Optional[float] = None
+    total_distance: Optional[float] = None
+    hoover_index: Optional[float] = None
+    # {sales_id: [zone_ids], ...}
+    data: Dict[str, List[int]]

@@ -3,171 +3,125 @@ from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
 
-# ============ USER MODELS ============
+# ============ REGION MODEL ============
+class Region(Base):
+    __tablename__ = "regions"
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, nullable=False)  # Hà Nội, TP HCM, v.v.
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    territories = relationship("Territory", back_populates="region")
+    sales_users = relationship("User", back_populates="region")
+
+# ============ USER MODELS (GIỮ LẠI) ============
 class User(Base):
     __tablename__ = "users"
-
     id = Column(Integer, primary_key=True)
     username = Column(String, unique=True, nullable=False)
     email = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
     role = Column(String, nullable=False)  # admin, sales, customer
-    # is_approved: customer=True (auto-approved), sales=False (needs admin approval), admin=True (created by system)
     is_approved = Column(Boolean, default=False)
     full_name = Column(String, nullable=True)
     phone = Column(String, nullable=True)
+    region_id = Column(Integer, ForeignKey("regions.id"), nullable=True)  # Chỉ áp dụng cho sales
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
-    sales_territories = relationship("Territory", back_populates="sales_user", foreign_keys="Territory.sales_id")
+    region = relationship("Region", back_populates="sales_users")
     activities = relationship("ZoneActivity", back_populates="user")
 
-
-# ============ ZONE & DISTRICT MODELS ============
+# ============ ZONE MODELS ============
 class Zone(Base):
-    """Basic units - các đơn vị cơ bản để chia phân vùng"""
     __tablename__ = "zones"
-
     id = Column(Integer, primary_key=True)
     zone_code = Column(String, unique=True, nullable=False)
-    district_id = Column(Integer, ForeignKey("districts.id"))
-    name = Column(String, nullable=False)
     
-    # Tọa độ (longitude, latitude hoặc GeoJSON)
-    geometry = Column(JSON, nullable=True)  # GeoJSON format
+    # THAY ĐỔI: district_id -> territory_id
+    territory_id = Column(Integer, ForeignKey("territories.id"), nullable=True)
+    
+    name = Column(String, nullable=False)
+    geometry = Column(JSON, nullable=True)
     center_lat = Column(Float, nullable=True)
     center_lng = Column(Float, nullable=True)
-    area_size = Column(Float, nullable=True)  # Diện tích (m2 hoặc km2)
-    
-    # Hoạt động và thông tin khách hàng
+    area_size = Column(Float, nullable=True)
     num_customers = Column(Integer, default=0)
     num_orders = Column(Integer, default=0)
     revenue = Column(Float, default=0.0)
-    
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
-    district = relationship("District", back_populates="zones")
-    activity = relationship("ZoneActivity", uselist=False, back_populates="zone")
+    territory = relationship("Territory", back_populates="zones")
+    activities = relationship("ZoneActivity", back_populates="zone", order_by="desc(ZoneActivity.updated_at)")
     adjacencies = relationship("ZoneAdjacency", foreign_keys="ZoneAdjacency.zone_id1", back_populates="zone1")
     distances = relationship("ZoneDistance", foreign_keys="ZoneDistance.zone_id1", back_populates="zone1")
 
-
-class District(Base):
-    """Huyện/quốc gia - chứa nhiều zones"""
-    __tablename__ = "districts"
-
-    id = Column(Integer, primary_key=True)
-    code = Column(String, unique=True, nullable=False)
-    name = Column(String, nullable=False)
-    center_lat = Column(Float, nullable=True)
-    center_lng = Column(Float, nullable=True)
-    total_area = Column(Float, nullable=True)
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Relationships
-    zones = relationship("Zone", back_populates="district", cascade="all, delete-orphan")
-    territories = relationship("Territory", back_populates="district")
-
-
-# ============ ZONE ACTIVITY MODELS ============
+# ============ ZONE SUPPORT MODELS ============
 class ZoneActivity(Base):
-    """Thông tin hoạt động của từng zone"""
     __tablename__ = "zone_activities"
-
     id = Column(Integer, primary_key=True)
     zone_id = Column(Integer, ForeignKey("zones.id"), nullable=False)
-    
-    # Thông tin khách hàng và đơn hàng
     num_customers = Column(Integer, default=0)
     num_orders = Column(Integer, default=0)
     avg_order_value = Column(Float, default=0.0)
     total_revenue = Column(Float, default=0.0)
-    
-    # Khác
     population_density = Column(Float, nullable=True)
     business_density = Column(Float, nullable=True)
     traffic_density = Column(Float, nullable=True)
     notes = Column(Text, nullable=True)
-    
     updated_by = Column(Integer, ForeignKey("users.id"))
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Relationships
-    zone = relationship("Zone", back_populates="activity")
+    updated_at = Column(DateTime, default=datetime.utcnow)
+    zone = relationship("Zone", back_populates="activities")
     user = relationship("User", back_populates="activities")
 
-
 class ZoneAdjacency(Base):
-    """Ma trận kề - các zones liền kề nhau"""
     __tablename__ = "zone_adjacencies"
-
     id = Column(Integer, primary_key=True)
     zone_id1 = Column(Integer, ForeignKey("zones.id"), nullable=False)
     zone_id2 = Column(Integer, ForeignKey("zones.id"), nullable=False)
-    is_adjacent = Column(Boolean, default=True)  # True nếu hai zone liền kề
-    
-    # Relationships
+    is_adjacent = Column(Boolean, default=True)
     zone1 = relationship("Zone", foreign_keys=[zone_id1], back_populates="adjacencies")
     zone2 = relationship("Zone", foreign_keys=[zone_id2])
 
-
 class ZoneDistance(Base):
-    """Ma trận khoảng cách - khoảng cách giữa các zones"""
     __tablename__ = "zone_distances"
-
     id = Column(Integer, primary_key=True)
     zone_id1 = Column(Integer, ForeignKey("zones.id"), nullable=False)
     zone_id2 = Column(Integer, ForeignKey("zones.id"), nullable=False)
-    distance = Column(Float, nullable=False)  # Tính bằng km
-    travel_time = Column(Float, nullable=True)  # Tính bằng phút
-    
-    # Relationships
+    distance = Column(Float, nullable=False)
     zone1 = relationship("Zone", foreign_keys=[zone_id1], back_populates="distances")
     zone2 = relationship("Zone", foreign_keys=[zone_id2])
 
-
 # ============ TERRITORY MODELS ============
 class Territory(Base):
-    """Phân vùng bán hàng được giao cho sales person"""
     __tablename__ = "territories"
-
     id = Column(Integer, primary_key=True)
-    territory_code = Column(String, unique=True, nullable=False)
-    sales_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    district_id = Column(Integer, ForeignKey("districts.id"), nullable=False)
-    
-    # Các zones trong phân vùng này
-    zone_ids = Column(JSON, nullable=True)  # List of zone IDs
-    
-    # Thống kê
-    num_zones = Column(Integer, default=0)
-    num_customers = Column(Integer, default=0)
-    num_orders = Column(Integer, default=0)
-    total_revenue = Column(Float, default=0.0)
-    avg_distance = Column(Float, nullable=True)
-    
-    # Thuật toán được sử dụng
-    algorithm_used = Column(String, nullable=True)  # kmeans, greedy, localsearch
-    
-    is_active = Column(Boolean, default=True)
+    name = Column(String, unique=True, nullable=False)
+    parent_territory_id = Column(Integer, ForeignKey("territories.id"), nullable=True)
+    version_no = Column(Integer, default=1)
+    region_id = Column(Integer, ForeignKey("regions.id"), nullable=False)  # Phân vùng thuộc khu vực nào
+    zone_ids = Column(JSON, nullable=True) # Giữ lại để hỗ trợ logic cũ nếu cần
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    sales_user = relationship("User", back_populates="sales_territories", foreign_keys=[sales_id])
-    district = relationship("District", back_populates="territories")
+    region = relationship("Region", back_populates="territories")
+    parent = relationship("Territory", remote_side=[id])
+    zones = relationship("Zone", back_populates="territory")
+    work_assignments = relationship("WorkAssignment", back_populates="territory")
 
-
-class TerritoryHistory(Base):
-    """Lịch sử thay đổi phân vùng"""
-    __tablename__ = "territory_histories"
-
+class WorkAssignment(Base):
+    __tablename__ = "work_assignments"
     id = Column(Integer, primary_key=True)
-    territory_id = Column(Integer, ForeignKey("territories.id"))
-    action = Column(String, nullable=False)  # created, updated, zone_added, zone_removed
-    changed_zones = Column(JSON, nullable=True)
-    previous_zones = Column(JSON, nullable=True)
-    changed_by = Column(Integer, ForeignKey("users.id"))
+    territory_id = Column(Integer, ForeignKey("territories.id"), nullable=False)
+    assignment_date = Column(DateTime, nullable=False)
+    assignment_data = Column(JSON, nullable=False)
+    algorithm_used = Column(String, nullable=False)
+    cv_pct = Column(Float, nullable=True)
+    total_distance = Column(Float, nullable=True)
+    hoover_index = Column(Float, nullable=True)
+    is_finalized = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    territory = relationship("Territory", back_populates="work_assignments")
