@@ -31,8 +31,6 @@ export default function Login() {
         navigate("/admin");
       } else if (res.data.role === "sales") {
         navigate("/sales");
-      } else if (res.data.role === "customer") {
-        navigate("/customer");
       } else {
         // Fallback để tương thích với các role cũ
         navigate("/login");
@@ -116,9 +114,6 @@ export default function Login() {
               </div>
               <div className="demo-item">
                 <strong>Sales (Auto-approved):</strong> sales1 / Sales123!
-              </div>
-              <div className="demo-item">
-                <strong>Customer (Auto-approved):</strong> customer1 / Customer123!
               </div>
             </div>
           </div>

@@ -22,7 +22,7 @@ class User(Base):
     username = Column(String, unique=True, nullable=False)
     email = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
-    role = Column(String, nullable=False)  # admin, sales, customer
+    role = Column(String, nullable=False)  # admin, sales
     is_approved = Column(Boolean, default=False)
     full_name = Column(String, nullable=True)
     phone = Column(String, nullable=True)

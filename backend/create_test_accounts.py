@@ -43,15 +43,6 @@ accounts = [
         "full_name": "Sales User",
         "phone": "0987654321",
         "is_approved": True  # Auto-approve for testing
-    },
-    {
-        "username": "customer1",
-        "email": "customer@example.com",
-        "password": "Customer123!",
-        "role": "customer",
-        "full_name": "Customer User",
-        "phone": "0912345678",
-        "is_approved": True
     }
 ]
 
@@ -76,4 +67,3 @@ print("\n✓ All test accounts created successfully!")
 print("\nTest Credentials:")
 print("Admin: admin1 / Admin123!")
 print("Sales: sales1 / Sales123!")
-print("Customer: customer1 / Customer123!")

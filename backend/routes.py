@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 from typing import List, Dict, Any, Optional
 from external_services import fetch_wards_from_osm, osm_to_geojson
 import models
@@ -222,7 +222,6 @@ def _zone_group_is_connected(zone_ids: List[int], db: Session) -> bool:
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     """
     Register new user
-    - customer: auto-approved (is_approved = True)
     - sales: needs admin approval (is_approved = False)
     - admin: cannot be registered here (must be created by admin)
     """
@@ -243,9 +242,6 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
         
         hashed = auth.hash_password(user.password)
 
-        # Determine approval status based on role
-        is_approved = (user.role == 'customer')  # Only customer is auto-approved
-
         new_user = models.User(
             username=user.username,
             email=user.email,
@@ -253,19 +249,13 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
             role=user.role,
             full_name=user.full_name,
             phone=user.phone,
-            is_approved=is_approved
+            is_approved=False
         )
 
         db.add(new_user)
         db.commit()
         
-        # Different messages based on role
-        if user.role == 'customer':
-            msg = "Đăng ký thành công! Bạn có thể đăng nhập ngay."
-        else:  # sales
-            msg = "Đăng ký thành công! Vui lòng chờ admin duyệt tài khoản của bạn."
-        
-        return {"msg": msg}
+        return {"msg": "Đăng ký thành công! Vui lòng chờ admin duyệt tài khoản của bạn."}
     
     except HTTPException:
         raise
@@ -277,7 +267,10 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
 @router.post("/login")
 def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(
-        models.User.username == user.username
+        or_(
+            models.User.username == user.username,
+            models.User.email == user.username,
+        )
     ).first()
 
     if not db_user:
@@ -1049,6 +1042,247 @@ def delete_territory(territory_id: int, db: Session = Depends(get_db)):
 
 
 # ============ SALES ROUTES ============
+def _serialize_zone_for_sales(zone: models.Zone) -> Dict[str, Any]:
+    return {
+        "id": zone.id,
+        "zone_code": zone.zone_code,
+        "name": zone.name,
+        "territory_id": zone.territory_id,
+        "geometry": zone.geometry,
+        "center_lat": zone.center_lat,
+        "center_lng": zone.center_lng,
+        "num_customers": zone.num_customers or 0,
+        "num_orders": zone.num_orders or 0,
+        "revenue": zone.revenue or 0,
+        "created_at": zone.created_at,
+    }
+
+
+def _find_sales_assignment(
+    sales_id: int,
+    db: Session,
+    date: Optional[str] = None,
+) -> Optional[models.WorkAssignment]:
+    query = db.query(models.WorkAssignment).filter(
+        models.WorkAssignment.is_finalized == True
+    )
+    if date:
+        query = query.filter(models.WorkAssignment.assignment_date.like(f"{date}%"))
+    assignments = query.order_by(models.WorkAssignment.assignment_date.desc()).all()
+    for assignment in assignments:
+        if str(sales_id) in (assignment.assignment_data or {}):
+            return assignment
+    return None
+
+
+@router.get("/sales/{sales_id}/profile")
+def get_sales_profile(sales_id: int, db: Session = Depends(get_db)):
+    sales = db.query(models.User).filter(models.User.id == sales_id).first()
+    if not sales:
+        raise HTTPException(status_code=404, detail="Sales khong tim thay")
+    if sales.role != "sales":
+        raise HTTPException(status_code=400, detail="User nay khong phai sales")
+    return {
+        "id": sales.id,
+        "username": sales.username,
+        "email": sales.email,
+        "full_name": sales.full_name,
+        "phone": sales.phone,
+        "region_id": sales.region_id,
+        "region_name": sales.region.name if sales.region else None,
+        "created_at": sales.created_at,
+    }
+
+
+@router.put("/sales/{sales_id}/profile")
+def update_sales_profile(
+    sales_id: int,
+    user_data: schemas.SalesProfileUpdate,
+    db: Session = Depends(get_db),
+):
+    sales = db.query(models.User).filter(models.User.id == sales_id).first()
+    if not sales:
+        raise HTTPException(status_code=404, detail="Sales khong tim thay")
+    if sales.role != "sales":
+        raise HTTPException(status_code=400, detail="User nay khong phai sales")
+
+    if user_data.email and user_data.email != sales.email:
+        existing_email = db.query(models.User).filter(
+            models.User.email == user_data.email,
+            models.User.id != sales_id,
+        ).first()
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Email da duoc su dung")
+        sales.email = user_data.email
+    if user_data.full_name is not None:
+        sales.full_name = user_data.full_name
+    if user_data.phone is not None:
+        sales.phone = user_data.phone
+
+    db.commit()
+    db.refresh(sales)
+    return {"msg": "Da cap nhat ho so thanh cong", "profile": get_sales_profile(sales_id, db)}
+
+
+@router.get("/sales/{sales_id}/work-shift")
+def get_sales_work_shift(
+    sales_id: int,
+    date: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    shift_date = date or datetime.utcnow().strftime("%Y-%m-%d")
+    assignment = _find_sales_assignment(sales_id, db, shift_date)
+    if not assignment:
+        return {
+            "sales_id": sales_id,
+            "date": shift_date,
+            "has_shift": False,
+            "zones": [],
+            "summary": {
+                "total_zones": 0,
+                "total_customers": 0,
+                "total_orders": 0,
+                "total_revenue": 0,
+            },
+        }
+
+    zone_ids = [int(zone_id) for zone_id in assignment.assignment_data.get(str(sales_id), [])]
+    zones = db.query(models.Zone).filter(models.Zone.id.in_(zone_ids)).all() if zone_ids else []
+    territory = assignment.territory
+
+    return {
+        "sales_id": sales_id,
+        "date": shift_date,
+        "has_shift": True,
+        "assignment_id": assignment.id,
+        "assignment_date": assignment.assignment_date,
+        "territory": {
+            "id": territory.id,
+            "name": territory.name,
+            "region_id": territory.region_id,
+            "region_name": territory.region.name if territory.region else None,
+        } if territory else None,
+        "zones": [_serialize_zone_for_sales(zone) for zone in zones],
+        "summary": {
+            "total_zones": len(zones),
+            "total_customers": sum(zone.num_customers or 0 for zone in zones),
+            "total_orders": sum(zone.num_orders or 0 for zone in zones),
+            "total_revenue": sum(zone.revenue or 0 for zone in zones),
+        },
+        "algorithm": assignment.algorithm_used,
+    }
+
+
+@router.get("/sales/{sales_id}/sales-history")
+def get_sales_history(sales_id: int, db: Session = Depends(get_db)):
+    assignments = db.query(models.WorkAssignment).filter(
+        models.WorkAssignment.is_finalized == True
+    ).order_by(models.WorkAssignment.assignment_date.desc()).all()
+
+    rows = []
+    seen_activity_ids = set()
+    for assignment in assignments:
+        zone_ids = [int(zone_id) for zone_id in (assignment.assignment_data or {}).get(str(sales_id), [])]
+        if not zone_ids:
+            continue
+        zones = db.query(models.Zone).filter(models.Zone.id.in_(zone_ids)).all()
+        zone_by_id = {zone.id: zone for zone in zones}
+        activities = db.query(models.ZoneActivity).filter(
+            models.ZoneActivity.zone_id.in_(zone_ids)
+        ).order_by(models.ZoneActivity.updated_at.desc()).all()
+
+        for activity in activities:
+            if activity.id in seen_activity_ids:
+                continue
+            seen_activity_ids.add(activity.id)
+            zone = zone_by_id.get(activity.zone_id)
+            rows.append({
+                "id": activity.id,
+                "assignment_id": assignment.id,
+                "assignment_date": assignment.assignment_date,
+                "territory_id": assignment.territory_id,
+                "territory_name": assignment.territory.name if assignment.territory else None,
+                "zone_id": activity.zone_id,
+                "zone_name": zone.name if zone else None,
+                "zone_code": zone.zone_code if zone else None,
+                "updated_at": activity.updated_at,
+                "num_customers": activity.num_customers or 0,
+                "num_orders": activity.num_orders or 0,
+                "total_revenue": activity.total_revenue or 0,
+                "avg_order_value": activity.avg_order_value or 0,
+                "notes": activity.notes,
+            })
+
+    return rows
+
+
+@router.post("/sales/{sales_id}/invoices")
+def create_sales_invoice(
+    sales_id: int,
+    invoice: schemas.SalesInvoiceCreate,
+    db: Session = Depends(get_db),
+):
+    assignment = _find_sales_assignment(sales_id, db, datetime.utcnow().strftime("%Y-%m-%d"))
+    if not assignment:
+        raise HTTPException(status_code=400, detail="Sales chua co ca lam viec hom nay")
+
+    assigned_zone_ids = [int(zone_id) for zone_id in assignment.assignment_data.get(str(sales_id), [])]
+    if invoice.zone_id not in assigned_zone_ids:
+        raise HTTPException(status_code=400, detail="Zone khong thuoc ca lam viec hom nay")
+
+    zone = db.query(models.Zone).filter(models.Zone.id == invoice.zone_id).first()
+    if not zone:
+        raise HTTPException(status_code=404, detail="Zone khong tim thay")
+    if invoice.order_count <= 0:
+        raise HTTPException(status_code=400, detail="So don phai lon hon 0")
+    if invoice.amount < 0:
+        raise HTTPException(status_code=400, detail="Gia tien khong hop le")
+
+    zone.num_orders = (zone.num_orders or 0) + invoice.order_count
+    zone.num_customers = (zone.num_customers or 0) + max(invoice.customer_count or 0, 0)
+    zone.revenue = (zone.revenue or 0) + invoice.amount
+
+    sold_at = invoice.sold_at or datetime.utcnow()
+    location_note = ""
+    if invoice.current_lat is not None and invoice.current_lng is not None:
+        location_note = f" | vi tri: {invoice.current_lat}, {invoice.current_lng}"
+    notes = (
+        f"Hoa don sales #{sales_id}; thoi gian: {sold_at.isoformat()}; "
+        f"so don: {invoice.order_count}; gia tien: {invoice.amount}; "
+        f"zone: {zone.name}{location_note}"
+    )
+    if invoice.notes:
+        notes = f"{notes} | ghi chu: {invoice.notes}"
+
+    activity = models.ZoneActivity(
+        zone_id=zone.id,
+        num_customers=zone.num_customers,
+        num_orders=zone.num_orders,
+        avg_order_value=(zone.revenue / zone.num_orders) if zone.num_orders else 0,
+        total_revenue=zone.revenue,
+        notes=notes,
+        updated_by=sales_id,
+        updated_at=sold_at,
+    )
+
+    db.add(activity)
+    db.commit()
+    db.refresh(zone)
+    return {
+        "msg": "Da tao hoa don thanh cong",
+        "invoice": {
+            "zone_id": zone.id,
+            "zone_name": zone.name,
+            "order_count": invoice.order_count,
+            "amount": invoice.amount,
+            "sold_at": sold_at,
+            "current_lat": invoice.current_lat,
+            "current_lng": invoice.current_lng,
+        },
+        "zone": _serialize_zone_for_sales(zone),
+    }
+
+
 @router.get("/sales/{sales_id}/assignments")
 def get_sales_assignments(sales_id: int, date: Optional[str] = None, db: Session = Depends(get_db)):
     """Lấy assignments (phân vùng) của sales person"""
@@ -1114,9 +1348,8 @@ def get_admin_statistics(db: Session = Depends(get_db)):
     total_zones = db.query(models.Zone).count()
     total_territories = db.query(models.Territory).count()
     total_sales = db.query(models.User).filter(models.User.role == 'sales').count()
-    total_customers = db.query(models.User).filter(models.User.role == 'customer').count()
-    
     all_zones = db.query(models.Zone).all()
+    total_customers = sum(z.num_customers for z in all_zones)
     total_orders = sum(z.num_orders for z in all_zones)
     total_revenue = sum(z.revenue for z in all_zones)
     

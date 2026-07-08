@@ -11,7 +11,7 @@ export default function Register() {
     confirmPassword: "",
     full_name: "",
     phone: "",
-    role: "customer",
+    role: "sales",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -150,27 +150,12 @@ export default function Register() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="role">Vai trò</label>
-              <select 
-                id="role"
-                name="role" 
-                value={formData.role} 
-                onChange={handleChange}
-              >
-                <option value="customer">Khách Hàng</option>
-                <option value="sales">Sales Person</option>
-              </select>
+              <label>Vai trò</label>
+              <input value="Sales" disabled />
               <div className="role-info">
-                {formData.role === 'customer' && (
-                  <p style={{ color: '#27ae60', fontSize: '12px', marginTop: '5px' }}>
-                Tài khoản khách hàng được tự động duyệt, bạn có thể đăng nhập ngay sau khi đăng ký.
-                  </p>
-                )}
-                {formData.role === 'sales' && (
-                  <p style={{ color: '#f39c12', fontSize: '12px', marginTop: '5px' }}>
-                Tài khoản sales cần được admin duyệt trước khi có thể đăng nhập. Vui lòng chờ.
-                  </p>
-                )}
+                <p style={{ color: '#f39c12', fontSize: '12px', marginTop: '5px' }}>
+                  Tài khoản sales cần được admin duyệt trước khi có thể đăng nhập. Vui lòng chờ.
+                </p>
               </div>
             </div>
 

@@ -5,7 +5,6 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import AdminDashboard from "./pages/AdminDashboard";
 import SalesDashboard from "./pages/SalesDashboard";
-import CustomerDashboard from "./pages/CustomerDashboard";
 
 // Bảo vệ route - nếu không có token thì chuyển hướng về login
 const ProtectedRoute = ({ element, requiredRole }) => {
@@ -33,10 +32,9 @@ function App(){
         <Route path="/forgot-password" element={<ForgotPassword/>}/>
         <Route path="/admin" element={<ProtectedRoute element={<AdminDashboard/>} requiredRole="admin" />}/>
         <Route path="/sales" element={<ProtectedRoute element={<SalesDashboard/>} requiredRole="sales" />}/>
-        <Route path="/customer" element={<ProtectedRoute element={<CustomerDashboard/>} requiredRole="customer" />}/>
         {/* Legacy routes para tương thích */}
         <Route path="/shipper" element={<Navigate to="/sales" />}/>
-        <Route path="/user" element={<Navigate to="/customer" />}/>
+        <Route path="/user" element={<Navigate to="/sales" />}/>
         <Route path="/manager" element={<Navigate to="/admin" />}/>
       </Routes>
     </BrowserRouter>

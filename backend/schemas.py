@@ -8,14 +8,14 @@ class UserCreate(BaseModel):
     username: str
     email: str
     password: str
-    role: str  # sales, customer (admin cannot be created through registration)
+    role: str  # sales only (admin must be created by an existing admin)
     full_name: Optional[str] = None
     phone: Optional[str] = None
 
     @validator('role')
     def validate_role(cls, v):
-        if v not in ['sales', 'customer']:
-            raise ValueError('Role phải là sales hoặc customer. Admin phải được tạo bởi hệ thống.')
+        if v != 'sales':
+            raise ValueError('Role đăng ký công khai chỉ hỗ trợ sales. Admin phải được tạo bởi hệ thống.')
         return v
 
     @validator('password')
@@ -78,6 +78,25 @@ class AdminUpdateSales(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
     region_id: Optional[int] = None
+
+
+class SalesProfileUpdate(BaseModel):
+    """Sales updates their own profile."""
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class SalesInvoiceCreate(BaseModel):
+    """Sales creates an invoice during an assigned shift."""
+    zone_id: int
+    order_count: int = 1
+    amount: float
+    customer_count: int = 1
+    sold_at: Optional[datetime] = None
+    current_lat: Optional[float] = None
+    current_lng: Optional[float] = None
+    notes: Optional[str] = None
 
 
 class AdminCreateAdmin(BaseModel):

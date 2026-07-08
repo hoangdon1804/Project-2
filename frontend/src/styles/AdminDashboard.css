@@ -1487,6 +1487,13 @@ body {
     margin-bottom: 10px;
 }
 
+.territory-scroll-list {
+    max-height: 420px;
+    overflow-y: auto;
+    padding-right: 6px;
+    margin-right: -6px;
+}
+
 .territory-tree-item > .dist-item-card {
     margin-bottom: 0;
 }
@@ -1561,4 +1568,19 @@ body {
 .zone-history-modal {
     max-width: 850px;
     width: 92%;
+}
+
+.territory-zone-scroll {
+    max-height: 360px;
+    overflow: auto;
+}
+
+.territory-zone-scroll .zone-table {
+    margin-top: 0;
+}
+
+.territory-zone-scroll .zone-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
 }

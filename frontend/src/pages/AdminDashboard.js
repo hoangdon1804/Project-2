@@ -19,7 +19,7 @@ function MapEvents({ drawingMode, currentPoints, setCurrentPoints }) {
     click(e) {
       if (drawingMode) {
         const { lat, lng } = e.latlng;
-        setCurrentPoints([...currentPoints, [lat, lng]]);
+        setCurrentPoints((points) => [...points, [lat, lng]]);
       }
     },
   });
@@ -958,11 +958,12 @@ export default function AdminDashboard() {
                 </div>
 
                 <h4>Phân vùng mục tiêu</h4>
-                {rootTerritories.map((t) => {
-                  const rootVersions = versionsByRootId.get(Number(t.id)) || [];
-                  const rootExpanded =
-                    Number(expandedRootTerritoryId) === Number(t.id);
-                  return (
+                <div className="territory-scroll-list">
+                  {rootTerritories.map((t) => {
+                    const rootVersions = versionsByRootId.get(Number(t.id)) || [];
+                    const rootExpanded =
+                      Number(expandedRootTerritoryId) === Number(t.id);
+                    return (
                   <div className="territory-tree-item" key={t.id}>
                   <div
                     className={`dist-item-card ${selectedTerritoryId === t.id ? "selected-active" : ""}`}
@@ -1040,7 +1041,8 @@ export default function AdminDashboard() {
                   )}
                   </div>
                   );
-                })}
+                  })}
+                </div>
               </div>
 
               <div className="zone-display">
@@ -1139,7 +1141,7 @@ export default function AdminDashboard() {
 
                       return (
                         <GeoJSON
-                          key={`zone-${z.id}-${idx}-${isRedrawingZone ? "editing" : "view"}`}
+                          key={`zone-${z.id}-${idx}-${isDrawing ? "drawing" : "view"}-${isRedrawingZone ? "editing" : "idle"}`}
                           data={z.geometry}
                           interactive={!isDrawing}
                           style={{
@@ -1149,9 +1151,11 @@ export default function AdminDashboard() {
                             dashArray: isRedrawingZone ? "8, 6" : null,
                           }}
                         >
-                          <Popup>
-                            <strong>{z.name}</strong>
-                          </Popup>
+                          {!isDrawing && (
+                            <Popup>
+                              <strong>{z.name}</strong>
+                            </Popup>
+                          )}
                         </GeoJSON>
                       );
                     })}
@@ -1161,7 +1165,7 @@ export default function AdminDashboard() {
                 <div className="zone-details-list">
                   <h3>Zones hiển thị: {activeZones.length} vùng</h3>
                   {activeZones.length > 0 ? (
-                    <div className="zone-table-container">
+                    <div className="zone-table-container territory-zone-scroll">
                       <table className="zone-table">
                         <thead>
                           <tr>
