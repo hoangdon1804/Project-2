@@ -1472,7 +1472,7 @@ def assign_work(request: schemas.AssignWorkRequest, db: Session = Depends(get_db
                 adj_list.setdefault(adj.zone_id1, []).append(adj.zone_id2)
                 adj_list.setdefault(adj.zone_id2, []).append(adj.zone_id1)
 
-        if not adjacencies:
+        if not adjacencies or not any(adj_list.values()):
             for i, zone_id in enumerate(zone_ids):
                 if i > 0:
                     prev_id = zone_ids[i - 1]

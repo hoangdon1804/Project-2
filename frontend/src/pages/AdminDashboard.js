@@ -137,19 +137,21 @@ export default function AdminDashboard() {
           algorithm: "grasp", // Mặc định dùng GRASP tốt nhất
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setAssignmentResult(data.assignment);
-        setAssignmentMetrics({
-          cv_pct: data.cv_pct,
-          total_distance: data.total_distance,
-          hoover_index: data.hoover_index,
-          algorithm: data.algorithm,
-        });
-        alert("Đã chia vùng xong! Xem kết quả trên bản đồ phía dưới.");
+      const data = await res.json();
+      if (!res.ok) {
+        alert("Lỗi: " + (data.detail || "Không thể chia vùng tự động"));
+        return;
       }
+      setAssignmentResult(data.assignment);
+      setAssignmentMetrics({
+        cv_pct: data.cv_pct,
+        total_distance: data.total_distance,
+        hoover_index: data.hoover_index,
+        algorithm: data.algorithm,
+      });
+      alert("Đã chia vùng xong! Xem kết quả trên bản đồ phía dưới.");
     } catch (e) {
-      alert("Lỗi khi chia vùng");
+      alert("Lỗi khi chia vùng: " + e.message);
     } finally {
       setIsAssigning(false);
     }
@@ -653,19 +655,26 @@ export default function AdminDashboard() {
     }
   };
 
-  const activeZones = useMemo(() => {
-    if (!selectedTerritoryId) return [];
-    return allZones.filter(
-      (z) => Number(z.territory_id) === Number(selectedTerritoryId),
-    );
-  }, [selectedTerritoryId, allZones]);
-
   const selectedTerritory = useMemo(
     () =>
       territories.find((t) => Number(t.id) === Number(selectedTerritoryId)) ||
       null,
     [territories, selectedTerritoryId],
   );
+
+  const activeZones = useMemo(() => {
+    if (!selectedTerritoryId) return [];
+    const territoryZoneIds = new Set(
+      (selectedTerritory?.zone_ids || []).map((id) => Number(id)),
+    );
+    return allZones.filter((z) => {
+      const zoneId = Number(z.id);
+      return (
+        Number(z.territory_id) === Number(selectedTerritoryId) ||
+        territoryZoneIds.has(zoneId)
+      );
+    });
+  }, [selectedTerritoryId, selectedTerritory, allZones]);
 
   const assignableSales = useMemo(() => {
     if (!selectedTerritory) return [];

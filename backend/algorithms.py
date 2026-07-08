@@ -323,6 +323,8 @@ class AdvancedTerritoryDesign(TerritoryAlgorithm):
         
         total_w1 = sum(self._get_node_w1(self.nodes[n]) for n in self.nodes)
         mu = total_w1 / num_sales if num_sales > 0 else 1
+        if mu <= 0:
+            mu = 1
         
         max_dispersion = 0
         for sid, cluster in clusters.items():
@@ -364,7 +366,9 @@ class AdvancedTerritoryDesign(TerritoryAlgorithm):
         unassigned.remove(start_node)
         
         total_w1 = sum(self._get_node_w1(self.nodes[n]) for n in self.nodes)
-        mu = total_w1 / num_sales
+        mu = total_w1 / num_sales if num_sales > 0 else 1
+        if mu <= 0:
+            mu = 1
         
         while unassigned:
             neighbors = set()
