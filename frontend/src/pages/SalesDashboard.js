@@ -8,8 +8,7 @@ import {
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import "../styles/Dashboard.css";
-
-const API_BASE = "http://localhost:8000";
+import { API_BASE } from "../api";
 
 const today = () => new Date().toISOString().slice(0, 10);
 

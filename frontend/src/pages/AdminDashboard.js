@@ -11,8 +11,7 @@ import {
 import "leaflet/dist/leaflet.css";
 import { useNavigate } from "react-router-dom";
 import "../styles/AdminDashboard.css";
-
-const API_BASE = "http://localhost:8000";
+import { API_BASE } from "../api";
 
 function MapEvents({ drawingMode, currentPoints, setCurrentPoints }) {
   useMapEvents({

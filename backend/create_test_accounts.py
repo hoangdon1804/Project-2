@@ -58,12 +58,12 @@ for acc in accounts:
         is_approved=acc["is_approved"]
     )
     db.add(user)
-    print(f"✓ Created {acc['username']} ({acc['role']})")
+    print(f"Created {acc['username']} ({acc['role']})")
 
 db.commit()
 db.close()
 
-print("\n✓ All test accounts created successfully!")
+print("\nAll test accounts created successfully!")
 print("\nTest Credentials:")
 print("Admin: admin1 / Admin123!")
 print("Sales: sales1 / Sales123!")

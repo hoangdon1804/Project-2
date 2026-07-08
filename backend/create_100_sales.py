@@ -49,7 +49,7 @@ try:
             existing = db.query(User).filter(User.username == acc["username"]).first()
             if existing:
                 skipped_count += 1
-                print(f"⊘ Skipped {acc['username']} (already exists)")
+                print(f"Skipped {acc['username']} (already exists)")
                 continue
             
             user = User(
@@ -66,19 +66,19 @@ try:
             
             # Print progress every 10 accounts
             if created_count % 10 == 0:
-                print(f"✓ Created {created_count} accounts...")
+                print(f"Created {created_count} accounts...")
         
         except Exception as e:
             db.rollback()
-            print(f"✗ Error creating {acc['username']}: {str(e)}")
+            print(f"Error creating {acc['username']}: {str(e)}")
             continue
 
     db.commit()
     db.close()
     
     print(f"\n{'='*50}")
-    print(f"✓ Successfully created {created_count} sales accounts!")
-    print(f"⊘ Skipped {skipped_count} duplicate accounts")
+    print(f"Successfully created {created_count} sales accounts!")
+    print(f"Skipped {skipped_count} duplicate accounts")
     print(f"Total: {created_count + skipped_count} accounts processed")
     print(f"{'='*50}")
     
@@ -98,7 +98,7 @@ try:
         print(f"  {acc['username']} / {acc['password']}")
 
 except Exception as e:
-    print(f"\n✗ Fatal error: {str(e)}")
+    print(f"\nFatal error: {str(e)}")
     db.rollback()
     db.close()
     raise

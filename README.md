@@ -132,6 +132,21 @@ Frontend chạy tại:
 http://localhost:3000
 ```
 
+Nếu cổng backend `8000` đang bị chiếm, có thể chạy backend ở cổng khác, ví dụ:
+
+```bash
+cd backend
+python -m uvicorn main:app --reload --host 0.0.0.0 --port 8001
+```
+
+Sau đó chạy frontend với biến môi trường:
+
+```powershell
+cd frontend
+$env:REACT_APP_API_BASE="http://127.0.0.1:8001"
+npm start
+```
+
 ## Tài khoản mẫu
 
 Sau khi chạy `backend/create_test_accounts.py`, có thể dùng:
