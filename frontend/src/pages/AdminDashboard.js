@@ -12,6 +12,7 @@ import "leaflet/dist/leaflet.css";
 import { useNavigate } from "react-router-dom";
 import "../styles/AdminDashboard.css";
 import { API_BASE } from "../api";
+import AlgorithmComparison, { comparisonColor } from "./AlgorithmComparison";
 
 function MapEvents({ drawingMode, currentPoints, setCurrentPoints }) {
   useMapEvents({
@@ -52,6 +53,8 @@ export default function AdminDashboard() {
   const [selectedSalesIds, setSelectedSalesIds] = useState([]);
   const [assignmentResult, setAssignmentResult] = useState(null); // { salesId: [zoneIds] }
   const [assignmentMetrics, setAssignmentMetrics] = useState(null);
+  // true khi admin đã sửa tay kết quả thuật toán (khi lưu sẽ ghi "manual_adjusted")
+  const [assignmentEdited, setAssignmentEdited] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
   const [isUpdatingAdjacency, setIsUpdatingAdjacency] = useState(false);
   const [isFakingMetrics, setIsFakingMetrics] = useState(false);
@@ -113,6 +116,7 @@ export default function AdminDashboard() {
     setSelectedSalesIds([]);
     setAssignmentResult(null);
     setAssignmentMetrics(null);
+    setAssignmentEdited(false);
   }, [selectedTerritoryId]);
 
   // 2. Hàm chạy thuật toán chia vùng
@@ -148,7 +152,9 @@ export default function AdminDashboard() {
         total_distance: data.total_distance,
         hoover_index: data.hoover_index,
         algorithm: data.algorithm,
+        label: "Reactive GRASP",
       });
+      setAssignmentEdited(false);
       alert("Đã chia vùng xong! Xem kết quả trên bản đồ phía dưới.");
     } catch (e) {
       alert("Lỗi khi chia vùng: " + e.message);
@@ -169,6 +175,41 @@ export default function AdminDashboard() {
     if (!newResult[targetKey]) newResult[targetKey] = [];
     newResult[targetKey].push(zoneId);
     setAssignmentResult(newResult);
+    setAssignmentEdited(true);
+  };
+
+  const salesNameOf = (salesId) => {
+    const sales = [...availableSales, ...salesList].find(
+      (item) => Number(item.id) === Number(salesId),
+    );
+    return sales?.full_name || sales?.username || `Sales ${salesId}`;
+  };
+
+  // Áp dụng một kết quả từ phần "So sánh thuật toán" vào bản đồ chỉnh sửa / lưu bên dưới.
+  const handleAdoptComparison = (report) => {
+    const assignment = {};
+    Object.entries(report.assignment || {}).forEach(([salesId, zoneIds]) => {
+      assignment[String(salesId)] = (zoneIds || []).map(Number);
+    });
+    setAssignmentResult(assignment);
+    setAssignmentMetrics({
+      cv_pct: report.metrics?.cv_pct,
+      total_distance: report.metrics?.total_distance,
+      hoover_index: report.metrics?.hoover_index,
+      algorithm: report.algorithm,
+      label: report.label,
+    });
+    setAssignmentEdited(false);
+    const problems = [];
+    if (report.metrics?.disconnected_territories > 0)
+      problems.push(`${report.metrics.disconnected_territories} sales có zones không liền kề nhau`);
+    if (report.metrics?.empty_territories > 0)
+      problems.push(`${report.metrics.empty_territories} sales không có zone nào`);
+    if (problems.length)
+      alert(
+        `Đã chọn kết quả "${report.label}". Lưu ý: ${problems.join(", ")} – ` +
+          "hãy chỉnh tay trước khi lưu, nếu không hệ thống sẽ từ chối.",
+      );
   };
 
   const handleRebuildAdjacency = async () => {
@@ -209,7 +250,10 @@ export default function AdminDashboard() {
       }
       if (res.ok) {
         await refreshData();
-        alert(`Đã fake dữ liệu cho ${data.updated_zones || 0} zones`);
+        alert(
+          `Đã fake dữ liệu theo diện tích cho ${data.updated_zones || 0} zones ` +
+            `(mật độ ≈ ${data.customers_per_km2} khách hàng/km², seed ${data.seed})`,
+        );
       } else {
         alert("Lỗi: " + (data.detail || "Không thể fake dữ liệu"));
       }
@@ -240,7 +284,9 @@ export default function AdminDashboard() {
         territory_id: selectedTerritoryId,
         date: assignDate,
         data: assignmentResult,
-        algorithm: "manual_adjusted",
+        algorithm: assignmentEdited
+          ? "manual_adjusted"
+          : assignmentMetrics?.algorithm || "manual_adjusted",
         cv_pct: assignmentMetrics?.cv_pct,
         total_distance: assignmentMetrics?.total_distance,
         hoover_index: assignmentMetrics?.hoover_index,
@@ -264,8 +310,10 @@ export default function AdminDashboard() {
     );
   };
 
-  // Màu sắc cố định cho từng Sales dựa trên ID
+  // Màu của Sales: theo thứ tự sales đang chọn (trùng màu với các bản đồ so sánh thuật toán)
   const getSalesColor = (salesId) => {
+    const index = selectedSalesIds.map(Number).indexOf(Number(salesId));
+    if (index >= 0) return comparisonColor(index);
     const colors = [
       "#FF5733",
       "#33FF57",
@@ -302,7 +350,7 @@ export default function AdminDashboard() {
     if (!selectedTerritoryId)
       return alert("Vui lòng chọn một Phân vùng trước!");
     if (!searchDistrict)
-      return alert("Vui lòng nhập tên Quận (ví dụ: Quận Cầu Giấy)");
+      return alert("Vui lòng nhập tên phường/xã hoặc quận/huyện cũ");
 
     setIsFetching(true);
     const targetTerritoryId = selectedTerritoryId;
@@ -317,7 +365,8 @@ export default function AdminDashboard() {
       });
 
       if (res.ok) {
-        alert("Tải dữ liệu các phường thành công!");
+        const result = await res.json();
+        alert(result.msg || "Tải dữ liệu các phường thành công!");
         setSearchDistrict("");
         await refreshData();
         setSelectedTerritoryId(targetTerritoryId);
@@ -920,7 +969,7 @@ export default function AdminDashboard() {
                   </h5>
                   <input
                     type="text"
-                    placeholder="Tên Quận (vd: Quận Cầu Giấy)"
+                    placeholder="Tên phường/xã hoặc quận/huyện cũ"
                     value={searchDistrict}
                     onChange={(e) => setSearchDistrict(e.target.value)}
                     style={{
@@ -1341,6 +1390,22 @@ export default function AdminDashboard() {
                     : "Chia vùng Tự động"}
                 </button>
               </div>
+
+              <AlgorithmComparison
+                territoryId={selectedTerritoryId}
+                salesIds={selectedSalesIds}
+                date={assignDate}
+                zones={activeZones}
+                salesName={salesNameOf}
+                onAdopt={handleAdoptComparison}
+              />
+
+              {assignmentResult && assignmentMetrics?.label && (
+                <p className="hint-text">
+                  Đang chỉnh sửa kết quả của: <strong>{assignmentMetrics.label}</strong>
+                  {assignmentEdited ? " (đã sửa tay)" : ""}
+                </p>
+              )}
 
               {assignmentResult && (
                 <div

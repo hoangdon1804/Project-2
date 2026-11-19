@@ -347,6 +347,42 @@ class AssignWorkRequest(BaseModel):
     algorithm: str  # local_search, tabu_search, grasp
 
 
+class CompareAlgorithmsRequest(BaseModel):
+    """Run several territory algorithms on the same territory/sales and compare them."""
+    territory_id: int
+    sales_ids: List[int]
+    date: str  # YYYY-MM-DD
+    algorithms: List[str]  # keys from GET /admin/algorithms
+    tolerance: float = 0.05  # balance tolerance tau (Prob-VNS, MILP, IQP)
+    time_limit: int = 60  # seconds per algorithm (Prob-VNS, MILP, IQP)
+    seed: Optional[int] = None
+
+    @validator("tolerance")
+    def tolerance_range(cls, value):
+        if not 0 < value <= 1:
+            raise ValueError("tolerance phai trong (0, 1]")
+        return value
+
+    @validator("time_limit")
+    def time_limit_range(cls, value):
+        if not 5 <= value <= 7200:  # 7200 s = time limit used by Salazar-Aguilar et al. (2011)
+            raise ValueError("time_limit phai trong [5, 7200] giay")
+        return value
+
+
+class EvaluateAssignmentRequest(BaseModel):
+    """Recompute the comparison metrics of an (edited) assignment."""
+    territory_id: int
+    assignment: Dict[str, List[int]]  # {sales_id: [zone_ids]}
+    tolerance: float = 0.05
+
+    @validator("tolerance")
+    def tolerance_range(cls, value):
+        if not 0 < value <= 1:
+            raise ValueError("tolerance phai trong (0, 1]")
+        return value
+
+
 class WorkAssignmentResponse(BaseModel):
     """Response from work assignment"""
     assignment: Dict[int, List[int]]  # {sales_id: [zone_ids], ...}

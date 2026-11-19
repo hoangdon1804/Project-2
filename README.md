@@ -9,6 +9,7 @@
 - Admin lấy dữ liệu phường/xã từ OpenStreetMap.
 - Admin tự vẽ zone mới trên bản đồ.
 - Admin chạy thuật toán phân công zone cho sale theo ngày.
+- Admin so sánh nhiều thuật toán trên cùng phân vùng (Reactive GRASP, Prob-VNS, MILP/IQP p-center và p-median): bảng chỉ số và mỗi thuật toán một bản đồ đặt cạnh nhau, rồi chọn một kết quả để chỉnh sửa và lưu. MILP (CPLEX) và IQP (DICOPT) chạy qua `gamspy` và cần license GAMSPy (xem `requirements.txt`). Trên frontend-redesign, phần này nằm ở tab riêng "Phân công công việc", cho phép đổi sales của từng zone ngay trên bản đồ kết quả, tính lại chỉ số và hoàn tác về kết quả ban đầu.
 - Admin lưu/chốt kết quả phân công.
 - Sale xem ca làm việc, zone được giao và ghi nhận hóa đơn/doanh thu.
 

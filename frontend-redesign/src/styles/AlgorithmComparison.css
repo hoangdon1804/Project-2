@@ -1,0 +1,425 @@
+/* So sánh thuật toán – theo design token của frontend-redesign (index.css :root). */
+.algo-compare {
+  margin: 4px 0 18px;
+  padding: 16px;
+  background: #fbfcfa;
+  border: 1px solid var(--line);
+}
+
+.algo-compare-header {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.algo-compare-header h3 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: -0.03em;
+}
+
+.algo-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.algo-option {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 11px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.algo-option:hover {
+  background: #f8fbf8;
+}
+
+.algo-option-selected {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.algo-option-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.algo-option input {
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.algo-option-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.algo-option-text strong {
+  font-weight: 800;
+}
+
+.algo-option-text small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.algo-option-text .algo-tag {
+  color: var(--warning);
+  font-weight: 700;
+}
+
+.algo-params {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.algo-params label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.algo-params input {
+  width: 130px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--panel);
+  font-family: "DM Mono", monospace;
+}
+
+.algo-params .hint-text {
+  flex: 1 1 240px;
+}
+
+.algo-alert {
+  padding: 9px 12px;
+  margin-bottom: 8px;
+  border-left: 3px solid;
+  font-size: 12px;
+}
+
+.algo-alert-warn {
+  border-left-color: var(--warning);
+  background: #fdf4ea;
+  color: #7a4512;
+}
+
+.algo-alert-bad {
+  border-left-color: var(--danger);
+  background: #fbeeee;
+  color: var(--danger);
+}
+
+.algo-table-wrap {
+  overflow-x: auto;
+  margin: 10px 0 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.algo-table {
+  min-width: 0;
+}
+
+.algo-table td:not(:first-child) {
+  font-family: "DM Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.algo-table td:first-child {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.algo-table td.algo-best {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  font-weight: 700;
+}
+
+.algo-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  font-family: "Manrope", Arial, sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.algo-badge-ok {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+.algo-badge-warn {
+  background: #fdf0df;
+  color: var(--warning);
+}
+
+.algo-badge-bad {
+  background: #f8e3e3;
+  color: var(--danger);
+}
+
+.algo-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.algo-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Mỗi thuật toán một bản đồ, đặt cạnh nhau. */
+.algo-map-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 12px;
+}
+
+.algo-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.algo-card-adopted {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.algo-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.algo-map {
+  height: 320px;
+  width: 100%;
+}
+
+.algo-map-empty {
+  height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #f1f6f1;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.algo-card-foot {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.algo-card-foot span {
+  font-family: "DM Mono", monospace;
+}
+
+.algo-card-foot small {
+  color: var(--muted);
+}
+
+.algo-card-foot .btn-small {
+  justify-self: start;
+  color: #fff;
+  background: var(--accent);
+}
+
+.algo-card-foot .btn-small:hover {
+  background: var(--accent-dark);
+}
+
+@media (max-width: 620px) {
+  .algo-map-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .algo-params input {
+    width: 100%;
+  }
+}
+
+/* Sửa tay trên bản đồ kết quả */
+.algo-card-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.algo-badge-edit {
+  background: #e7eefc;
+  color: #2f4f9e;
+}
+
+.algo-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.algo-card-foot .algo-btn-undo,
+.assign-undo-btn {
+  color: var(--ink);
+  background: #e9f0eb;
+  border: 1px solid var(--line);
+}
+
+.algo-card-foot .algo-btn-undo:hover,
+.assign-undo-btn:hover {
+  background: #dfe9e2;
+}
+
+.algo-warn-text {
+  color: var(--warning) !important;
+  font-weight: 700;
+}
+
+.algo-popup-label {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.algo-popup-label select {
+  min-width: 180px;
+  padding: 5px 6px;
+}
+
+/* Tab "Phân công công việc" */
+.assign-tab-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.assign-tab-toolbar .control-item select {
+  min-width: 280px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #fff;
+}
+
+.assign-tab-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.assign-tab-meta strong {
+  color: var(--ink);
+  font-family: "DM Mono", monospace;
+}
+
+.assign-tab-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--muted);
+  background: #fff;
+  border: 1px dashed var(--line);
+}
+
+/* Chỉ số của kết quả đang chỉnh sửa */
+.assign-editor-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.assign-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.assign-metric {
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.assign-metric span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.assign-metric strong {
+  display: block;
+  margin-top: 4px;
+  font-family: "DM Mono", monospace;
+  font-size: 16px;
+}
+
+.assign-metric small {
+  display: block;
+  margin-top: 2px;
+  font-family: "DM Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.assign-metric small.worse {
+  color: var(--danger);
+}
+
+.assign-metric small.better {
+  color: var(--accent-dark);
+}

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml" x:Class="SalesMobileApp.Pages.LoginPage" Shell.NavBarIsVisible="False">
+    <ScrollView><VerticalStackLayout Padding="28,64,28,28" Spacing="20" MaximumWidthRequest="520" HorizontalOptions="Center">
+        <Label Text="FIELD / SALES" Style="{StaticResource EyebrowLabel}" />
+        <Label Text="Bắt đầu ca làm việc" Style="{StaticResource PageTitle}" />
+        <Label Text="Kết nối với workspace bán hàng của bạn." Style="{StaticResource MutedLabel}" />
+        <Border Style="{StaticResource PanelBorder}" Margin="0,16,0,0"><VerticalStackLayout Padding="20" Spacing="14">
+            <Label Text="Backend URL" Style="{StaticResource FieldLabel}" />
+            <Entry Text="{Binding BaseUrl}" Placeholder="https://api.example.com/" Keyboard="Url" />
+            <Button Text="Dùng cấu hình gợi ý" Command="{Binding UseSuggestedUrlCommand}" Style="{StaticResource QuietButton}" />
+            <Label Text="Tài khoản" Style="{StaticResource FieldLabel}" />
+            <Entry Text="{Binding Username}" Placeholder="username hoặc email" Keyboard="Email" />
+            <Label Text="Mật khẩu" Style="{StaticResource FieldLabel}" />
+            <Entry Text="{Binding Password}" Placeholder="••••••••" IsPassword="True" />
+            <Label Text="{Binding Error}" Style="{StaticResource ErrorLabel}" IsVisible="{Binding Error, Converter={StaticResource StringNotEmptyConverter}}" />
+            <Button Text="Đăng nhập" Command="{Binding LoginCommand}" Style="{StaticResource PrimaryButton}" />
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" Color="{StaticResource Accent}" />
+        </VerticalStackLayout></Border>
+        <Label Text="Chỉ dành cho tài khoản Sales" Style="{StaticResource CaptionLabel}" HorizontalOptions="Center" />
+    </VerticalStackLayout></ScrollView>
+</ContentPage>

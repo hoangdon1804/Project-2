@@ -1,0 +1,248 @@
+.algo-compare {
+  margin: 10px 0 24px;
+  padding: 16px;
+  background: #f8f9fb;
+  border: 1px solid #e2e6ee;
+  border-radius: 8px;
+}
+
+.algo-compare-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.algo-compare-header h3 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 16px;
+}
+
+.algo-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.algo-option {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #dde2ea;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.algo-option-selected {
+  border-color: #667eea;
+  box-shadow: 0 0 0 1px #667eea inset;
+}
+
+.algo-option-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.algo-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.algo-option-text small {
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.algo-option-text .algo-tag {
+  color: #b45309;
+}
+
+.algo-params {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.algo-params label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.algo-params input {
+  width: 120px;
+  padding: 6px 8px;
+  border: 1px solid #cbd2dc;
+  border-radius: 4px;
+}
+
+.algo-params .hint-text {
+  flex: 1 1 240px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.algo-alert {
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.algo-alert-warn {
+  background: #fff7e6;
+  border: 1px solid #f5d39a;
+  color: #8a5a00;
+}
+
+.algo-alert-bad {
+  background: #fdecec;
+  border: 1px solid #f3b4b4;
+  color: #9b1c1c;
+}
+
+.algo-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 12px;
+  border: 1px solid #e2e6ee;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.algo-table {
+  margin-top: 0;
+  font-size: 13px;
+}
+
+.algo-table th,
+.algo-table td {
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
+.algo-table td:first-child {
+  color: #4b5563;
+}
+
+.algo-table td.algo-best {
+  font-weight: 700;
+  color: #166534;
+  background: #ecfdf3;
+}
+
+.algo-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.algo-badge-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.algo-badge-warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.algo-badge-bad {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.algo-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.algo-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.algo-legend-item .color-box {
+  width: 14px;
+  height: 14px;
+}
+
+/* Mỗi thuật toán một bản đồ, đặt cạnh nhau. */
+.algo-map-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 14px;
+}
+
+.algo-card {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #dde2ea;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.algo-card-adopted {
+  border-color: #27ae60;
+  box-shadow: 0 0 0 2px #27ae60;
+}
+
+.algo-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #eef0f4;
+  font-size: 14px;
+}
+
+.algo-map {
+  height: 320px;
+  width: 100%;
+}
+
+.algo-map-empty {
+  height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+  color: #6b7280;
+  background: #f3f4f6;
+  font-size: 13px;
+}
+
+.algo-card-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.algo-card-foot small {
+  color: #6b7280;
+}
+
+.algo-card-foot .btn-small {
+  align-self: flex-start;
+}

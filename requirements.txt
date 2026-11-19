@@ -6,3 +6,10 @@ bcrypt>=4.0.1,<6.0
 python-jose[cryptography]>=3.3,<4.0
 requests>=2.31,<3.0
 shapely>=2.0,<3.0
+# Algorithm comparison (backend/algorithm_comparison.py)
+numpy>=1.26
+scipy>=1.11
+networkx>=3.0
+# Optional: MILP (paper_milp.py, CPLEX) and IQP (gams_iqp.py, DICOPT) run through GAMSPy and need a
+# GAMSPy license, then: python -m gamspy install solver dicopt
+# gamspy>=1.29

@@ -1,0 +1,10 @@
+namespace SalesMobileApp.Models;
+public sealed record LoginRequest(string username, string password);
+public sealed record LoginResponse(string token, string role, int id);
+public sealed class SalesProfile { public int id { get; set; } public string username { get; set; } = ""; public string email { get; set; } = ""; public string? full_name { get; set; } public string? phone { get; set; } public int? region_id { get; set; } public string? region_name { get; set; } }
+public sealed class ZoneDto { public int id { get; set; } public string zone_code { get; set; } = ""; public string name { get; set; } = ""; public double? center_lat { get; set; } public double? center_lng { get; set; } public int num_customers { get; set; } public int num_orders { get; set; } public double revenue { get; set; } }
+public sealed class WorkShiftResponse { public int sales_id { get; set; } public string date { get; set; } = ""; public bool has_shift { get; set; } public string? algorithm { get; set; } public ShiftTerritory? territory { get; set; } public ShiftSummary summary { get; set; } = new(); public List<ZoneDto> zones { get; set; } = []; }
+public sealed class ShiftTerritory { public int id { get; set; } public string name { get; set; } = ""; public string? region_name { get; set; } }
+public sealed class ShiftSummary { public int total_zones { get; set; } public int total_customers { get; set; } public int total_orders { get; set; } public double total_revenue { get; set; } }
+public sealed class SalesHistoryRow { public int id { get; set; } public string? assignment_date { get; set; } public string? territory_name { get; set; } public string? zone_name { get; set; } public string? zone_code { get; set; } public int num_customers { get; set; } public int num_orders { get; set; } public double total_revenue { get; set; } public double avg_order_value { get; set; } public string? notes { get; set; } public string? updated_at { get; set; } }
+public sealed record InvoiceRequest(int zone_id, int order_count, double amount, int customer_count, DateTime? sold_at, double? current_lat, double? current_lng, string? notes);

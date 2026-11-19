@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import and_, or_
 from typing import List, Dict, Any, Optional
-from external_services import fetch_wards_from_osm, osm_to_geojson
+from external_services import fetch_wards_from_osm, osm_to_geojson, WardImportError, normalize_name
 import models
 import schemas
 import auth
@@ -13,6 +13,12 @@ import math
 from datetime import datetime
 from database import SessionLocal
 from algorithms import AdvancedTerritoryDesign
+import algorithm_comparison
+import fake_metrics
+from shapely.geometry import shape
+from shapely.strtree import STRtree
+from shapely.validation import make_valid
+from shapely.errors import GEOSException
 
 router = APIRouter()
 
@@ -40,122 +46,57 @@ def _get_territory_zone_ids(territory: models.Territory, db: Session) -> List[in
     return merged
 
 
-def _polygon_points(geometry: Optional[Dict[str, Any]]) -> List[tuple]:
-    if not geometry:
-        return []
-    coords = geometry.get("coordinates") or []
-    if geometry.get("type") == "Polygon" and coords:
-        return [(float(x), float(y)) for x, y in coords[0]]
-    if geometry.get("type") == "MultiPolygon" and coords:
-        points = []
-        for polygon in coords:
-            if polygon:
-                points.extend((float(x), float(y)) for x, y in polygon[0])
-        return points
-    return []
+ADJACENCY_TOLERANCE_DEG = 3e-5  # ~3 m: chấp nhận sai số nhỏ ở biên giữa hai zone
+OVERLAP_MIN_AREA_M2 = 50.0      # bỏ qua phần giao nhỏ do sai số biên
 
 
-def _bbox(points: List[tuple]) -> Optional[tuple]:
-    if not points:
+def _zone_shape(zone: models.Zone):
+    """Trả về polygon hợp lệ của zone hoặc None nếu thiếu/lỗi geometry."""
+    if not zone.geometry:
         return None
-    xs = [p[0] for p in points]
-    ys = [p[1] for p in points]
-    return min(xs), min(ys), max(xs), max(ys)
+    try:
+        polygon = shape(zone.geometry)
+        if not polygon.is_valid:
+            polygon = make_valid(polygon)
+        if polygon.is_empty:
+            return None
+        return polygon
+    except (TypeError, ValueError, KeyError, GEOSException):
+        return None
 
 
-def _bboxes_touch_or_overlap(a: tuple, b: tuple, tolerance: float = 0.0008) -> bool:
-    return not (
-        a[2] < b[0] - tolerance
-        or b[2] < a[0] - tolerance
-        or a[3] < b[1] - tolerance
-        or b[3] < a[1] - tolerance
-    )
+def _zone_area_km2(zone: models.Zone) -> Optional[float]:
+    """Diện tích zone (km²) từ geometry lon/lat (xem fake_metrics.area_km2)."""
+    return fake_metrics.area_km2(zone.geometry)
 
 
-def _segments(points: List[tuple]) -> List[tuple]:
-    if len(points) < 2:
-        return []
-    return list(zip(points, points[1:]))
+def _find_adjacent_pairs(zones: List[models.Zone]) -> List[tuple]:
+    """Các cặp (id nhỏ, id lớn) có khoảng cách biên <= ADJACENCY_TOLERANCE_DEG."""
+    polygons = {}
+    for zone in zones:
+        polygon = _zone_shape(zone)
+        if polygon is not None:
+            polygons[zone.id] = polygon
+    ids = list(polygons)
+    tree = STRtree([polygons[i] for i in ids])
+    pairs = set()
+    for index, zone_id in enumerate(ids):
+        for other_index in tree.query(polygons[zone_id], predicate="dwithin",
+                                      distance=ADJACENCY_TOLERANCE_DEG):
+            other_id = ids[int(other_index)]
+            if other_id != zone_id:
+                pairs.add((min(zone_id, other_id), max(zone_id, other_id)))
 
-
-def _point_segment_distance(point: tuple, seg_start: tuple, seg_end: tuple) -> float:
-    px, py = point
-    ax, ay = seg_start
-    bx, by = seg_end
-    dx = bx - ax
-    dy = by - ay
-    if dx == 0 and dy == 0:
-        return math.hypot(px - ax, py - ay)
-    t = max(0, min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
-    closest_x = ax + t * dx
-    closest_y = ay + t * dy
-    return math.hypot(px - closest_x, py - closest_y)
-
-
-def _orientation(a: tuple, b: tuple, c: tuple, tolerance: float) -> int:
-    value = (b[1] - a[1]) * (c[0] - b[0]) - (b[0] - a[0]) * (c[1] - b[1])
-    if abs(value) <= tolerance:
-        return 0
-    return 1 if value > 0 else 2
-
-
-def _on_segment(a: tuple, b: tuple, c: tuple, tolerance: float) -> bool:
-    return (
-        min(a[0], c[0]) - tolerance <= b[0] <= max(a[0], c[0]) + tolerance
-        and min(a[1], c[1]) - tolerance <= b[1] <= max(a[1], c[1]) + tolerance
-    )
-
-
-def _segments_intersect(seg_a: tuple, seg_b: tuple, tolerance: float) -> bool:
-    p1, q1 = seg_a
-    p2, q2 = seg_b
-    o1 = _orientation(p1, q1, p2, tolerance)
-    o2 = _orientation(p1, q1, q2, tolerance)
-    o3 = _orientation(p2, q2, p1, tolerance)
-    o4 = _orientation(p2, q2, q1, tolerance)
-    if o1 != o2 and o3 != o4:
-        return True
-    return (
-        (o1 == 0 and _on_segment(p1, p2, q1, tolerance))
-        or (o2 == 0 and _on_segment(p1, q2, q1, tolerance))
-        or (o3 == 0 and _on_segment(p2, p1, q2, tolerance))
-        or (o4 == 0 and _on_segment(p2, q1, q2, tolerance))
-    )
-
-
-def _segment_distance(seg_a: tuple, seg_b: tuple) -> float:
-    a1, a2 = seg_a
-    b1, b2 = seg_b
-    return min(
-        _point_segment_distance(a1, b1, b2),
-        _point_segment_distance(a2, b1, b2),
-        _point_segment_distance(b1, a1, a2),
-        _point_segment_distance(b2, a1, a2),
-    )
-
-
-def _zones_are_adjacent(zone_a: models.Zone, zone_b: models.Zone) -> bool:
-    points_a = _polygon_points(zone_a.geometry)
-    points_b = _polygon_points(zone_b.geometry)
-    bbox_a = _bbox(points_a)
-    bbox_b = _bbox(points_b)
-    if not bbox_a or not bbox_b:
-        if zone_a.center_lat is None or zone_b.center_lat is None:
-            return False
-        return (
-            abs(zone_a.center_lat - zone_b.center_lat) <= 0.015
-            and abs(zone_a.center_lng - zone_b.center_lng) <= 0.015
-        )
-    if not _bboxes_touch_or_overlap(bbox_a, bbox_b):
-        return False
-    tolerance = 0.0008
-    for seg_a in _segments(points_a):
-        for seg_b in _segments(points_b):
-            if _segments_intersect(seg_a, seg_b, tolerance):
-                return True
-            if _segment_distance(seg_a, seg_b) <= tolerance:
-                return True
-    return False
+    # Zone thiếu geometry: dùng khoảng cách tâm như phương án dự phòng.
+    no_geo = [z for z in zones if z.id not in polygons and z.center_lat is not None]
+    for zone_a in no_geo:
+        for zone_b in zones:
+            if zone_b.id == zone_a.id or zone_b.center_lat is None:
+                continue
+            if (abs(zone_a.center_lat - zone_b.center_lat) <= 0.015
+                    and abs(zone_a.center_lng - zone_b.center_lng) <= 0.015):
+                pairs.add((min(zone_a.id, zone_b.id), max(zone_a.id, zone_b.id)))
+    return sorted(pairs)
 
 
 def _rebuild_zone_adjacency(territory: models.Territory, db: Session) -> Dict[str, Any]:
@@ -169,23 +110,14 @@ def _rebuild_zone_adjacency(territory: models.Territory, db: Session) -> Dict[st
         | (models.ZoneAdjacency.zone_id2.in_(zone_ids))
     ).delete(synchronize_session=False)
 
-    adjacency_count = 0
-    for i, zone_a in enumerate(zones):
-        for zone_b in zones[i + 1 :]:
-            if _zones_are_adjacent(zone_a, zone_b):
-                db.add(
-                    models.ZoneAdjacency(
-                        zone_id1=min(zone_a.id, zone_b.id),
-                        zone_id2=max(zone_a.id, zone_b.id),
-                        is_adjacent=True,
-                    )
-                )
-                adjacency_count += 1
+    pairs = _find_adjacent_pairs(zones)
+    for zone_id1, zone_id2 in pairs:
+        db.add(models.ZoneAdjacency(zone_id1=zone_id1, zone_id2=zone_id2, is_adjacent=True))
     db.flush()
     return {
         "territory_id": territory.id,
         "zone_count": len(zones),
-        "adjacency_count": adjacency_count,
+        "adjacency_count": len(pairs),
     }
 
 
@@ -682,6 +614,54 @@ def get_zones(district_id: int = Query(None), db: Session = Depends(get_db)):
     return query.all()
 
 
+@router.get("/zones/overlaps")
+def get_zone_overlaps(territory_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
+    """Các cặp zone trong cùng một territory có phần giao đáng kể (>= OVERLAP_MIN_AREA_M2)."""
+    query = db.query(models.Zone).filter(models.Zone.territory_id.isnot(None))
+    if territory_id:
+        query = query.filter(models.Zone.territory_id == territory_id)
+    zones = query.all()
+
+    polygons = {}
+    skipped = []
+    for zone in zones:
+        polygon = _zone_shape(zone)
+        if polygon is None:
+            skipped.append({"id": zone.id, "name": zone.name})
+        else:
+            polygons[zone.id] = polygon
+
+    by_territory: Dict[int, List[models.Zone]] = {}
+    for zone in zones:
+        if zone.id in polygons:
+            by_territory.setdefault(zone.territory_id, []).append(zone)
+
+    overlaps = []
+    for group in by_territory.values():
+        tree = STRtree([polygons[z.id] for z in group])
+        for index, first in enumerate(group):
+            polygon_a = polygons[first.id]
+            for other_index in tree.query(polygon_a, predicate="intersects"):
+                other_index = int(other_index)
+                if other_index <= index:
+                    continue
+                second = group[other_index]
+                intersection = polygon_a.intersection(polygons[second.id])
+                if intersection.is_empty:
+                    continue
+                # Đổi độ² sang m² tại vĩ độ của phần giao.
+                lat = intersection.representative_point().y
+                area_m2 = intersection.area * (111320.0 ** 2) * math.cos(math.radians(lat))
+                if area_m2 >= OVERLAP_MIN_AREA_M2:
+                    overlaps.append({
+                        "zone_a": {"id": first.id, "name": first.name, "zone_code": first.zone_code},
+                        "zone_b": {"id": second.id, "name": second.name, "zone_code": second.zone_code},
+                        "overlap_area": intersection.area,
+                        "overlap_area_m2": round(area_m2, 1),
+                    })
+    return {"count": len(overlaps), "overlaps": overlaps, "skipped_zones": skipped}
+
+
 @router.get("/zones/{zone_id}")
 def get_zone(zone_id: int, db: Session = Depends(get_db)):
     """Lấy chi tiết zone"""
@@ -782,15 +762,22 @@ def delete_zone(zone_id: int, db: Session = Depends(get_db)):
     if not zone:
         raise HTTPException(status_code=404, detail="Zone không tìm thấy")
     
-    # 1. Xóa Activity của Zone này (nếu có) để tránh lỗi khóa ngoại (Foreign Key)
+    # Xóa các bản ghi phụ thuộc trước để tránh lỗi khóa ngoại.
     activities = db.query(models.ZoneActivity).filter(models.ZoneActivity.zone_id == zone_id).all()
     for activity in activities:
         db.delete(activity)
-        
-    # 2. Xóa Zone
-    if zone.territory_id:
-        territory = db.query(models.Territory).filter(models.Territory.id == zone.territory_id).first()
-        if territory and territory.zone_ids:
+    for adjacency in db.query(models.ZoneAdjacency).filter(
+        or_(models.ZoneAdjacency.zone_id1 == zone_id, models.ZoneAdjacency.zone_id2 == zone_id)
+    ).all():
+        db.delete(adjacency)
+    for distance in db.query(models.ZoneDistance).filter(
+        or_(models.ZoneDistance.zone_id1 == zone_id, models.ZoneDistance.zone_id2 == zone_id)
+    ).all():
+        db.delete(distance)
+
+    # Đồng bộ cả territory hiện tại và dữ liệu zone_ids cũ.
+    for territory in db.query(models.Territory).all():
+        if territory.zone_ids and any(int(zid) == int(zone_id) for zid in territory.zone_ids):
             territory.zone_ids = [zid for zid in territory.zone_ids if int(zid) != int(zone_id)]
 
     db.delete(zone)
@@ -910,9 +897,25 @@ def rebuild_territory_adjacency(territory_id: int, db: Session = Depends(get_db)
     return {"msg": "Da cap nhat ma tran ke", **result}
 
 
+FAKE_MEDIAN_ZONE_CUSTOMERS = fake_metrics.MEDIAN_ZONE_CUSTOMERS  # zone có diện tích trung vị nhận chừng này KH
+FAKE_MIN_CUSTOMERS = fake_metrics.MIN_CUSTOMERS
+
+
 @router.post("/territories/{territory_id}/fake-zone-metrics")
-def fake_territory_zone_metrics(territory_id: int, db: Session = Depends(get_db)):
-    """Tao du lieu mau cho khach hang, don hang va doanh thu cua zones."""
+def fake_territory_zone_metrics(
+    territory_id: int,
+    seed: Optional[int] = Query(None, description="Seed để tạo lại đúng cùng dữ liệu"),
+    customers_per_km2: Optional[float] = Query(
+        None, gt=0, description="Mật độ khách hàng cố định; mặc định tự hiệu chỉnh theo diện tích trung vị"
+    ),
+    noise: float = Query(0.25, ge=0, le=1, description="Độ lệch chuẩn của nhiễu log-normal quanh mật độ"),
+    db: Session = Depends(get_db),
+):
+    """Tạo dữ liệu mẫu theo diện tích: khách hàng = mật độ x diện tích (km²) x nhiễu log-normal.
+
+    Mật độ mặc định = FAKE_MEDIAN_ZONE_CUSTOMERS / diện tích trung vị của phân vùng, nên trong một phân vùng
+    số khách hàng tỉ lệ với diện tích, còn độ lớn chung giữ như trước. Đơn hàng và doanh thu sinh theo khách hàng.
+    Diện tích được lưu vào zone.area_size (km²)."""
     territory = db.query(models.Territory).filter(models.Territory.id == territory_id).first()
     if not territory:
         raise HTTPException(status_code=404, detail="Phan vung khong tim thay")
@@ -922,10 +925,23 @@ def fake_territory_zone_metrics(territory_id: int, db: Session = Depends(get_db)
     if not zones:
         raise HTTPException(status_code=400, detail="Phan vung khong co zones")
 
+    seed = seed if seed is not None else random.randrange(1, 2 ** 31)
+    rng = random.Random(seed)
+
+    areas = {zone.id: _zone_area_km2(zone) for zone in zones}
+    try:
+        density, median_area = fake_metrics.density_for(areas.values(), customers_per_km2)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Khong zone nao co geometry hop le de tinh dien tich")
+    missing_geometry = [zone.id for zone in zones if not areas[zone.id]]
+
     for zone in zones:
-        customers = random.randint(40, 450)
-        orders = random.randint(max(5, customers // 8), max(8, customers // 2))
-        avg_order_value = random.randint(180000, 2500000)
+        area = areas[zone.id] or median_area
+        if areas[zone.id]:
+            zone.area_size = round(area, 4)
+        customers = fake_metrics.fake_customers(rng, area, density, noise)
+        orders = fake_metrics.fake_orders(rng, customers)
+        avg_order_value = rng.randint(180000, 2500000)
         revenue = float(orders * avg_order_value)
         zone.num_customers = customers
         zone.num_orders = orders
@@ -937,12 +953,20 @@ def fake_territory_zone_metrics(territory_id: int, db: Session = Depends(get_db)
                 num_orders=orders,
                 avg_order_value=avg_order_value,
                 total_revenue=revenue,
-                notes="Fake data generated by admin",
+                notes=f"Fake data by area (seed {seed})",
             )
         )
 
     db.commit()
-    return {"msg": "Da fake du lieu kinh doanh cho zones", "updated_zones": len(zones)}
+    return {
+        "msg": "Da fake du lieu kinh doanh cho zones theo dien tich",
+        "updated_zones": len(zones),
+        "seed": seed,
+        "customers_per_km2": round(density, 2),
+        "median_area_km2": round(median_area, 4),
+        "total_area_km2": round(sum(areas[z.id] or median_area for z in zones), 4),
+        "zones_without_geometry": missing_geometry,
+    }
 
 
 @router.post("/territories/{territory_id}/versions")
@@ -1026,14 +1050,35 @@ def update_territory(territory_id: int, territory: schemas.TerritoryUpdate, db: 
 
 @router.delete("/territories/{territory_id}")
 def delete_territory(territory_id: int, db: Session = Depends(get_db)):
-    """Xóa phân vùng"""
+    """Xóa territory cùng toàn bộ zone và dữ liệu phụ thuộc."""
     territory = db.query(models.Territory).filter(
         models.Territory.id == territory_id
     ).first()
     
     if not territory:
         raise HTTPException(status_code=404, detail="Phân vùng không tìm thấy")
-    
+
+    zone_ids = [z.id for z in db.query(models.Zone.id).filter(
+        models.Zone.territory_id == territory_id
+    ).all()]
+    if zone_ids:
+        db.query(models.ZoneActivity).filter(models.ZoneActivity.zone_id.in_(zone_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(models.ZoneAdjacency).filter(or_(
+            models.ZoneAdjacency.zone_id1.in_(zone_ids),
+            models.ZoneAdjacency.zone_id2.in_(zone_ids),
+        )).delete(synchronize_session=False)
+        db.query(models.ZoneDistance).filter(or_(
+            models.ZoneDistance.zone_id1.in_(zone_ids),
+            models.ZoneDistance.zone_id2.in_(zone_ids),
+        )).delete(synchronize_session=False)
+        db.query(models.Zone).filter(models.Zone.id.in_(zone_ids)).delete(
+            synchronize_session=False
+        )
+    db.query(models.WorkAssignment).filter(
+        models.WorkAssignment.territory_id == territory_id
+    ).delete(synchronize_session=False)
     db.delete(territory)
     db.commit()
     
@@ -1472,12 +1517,11 @@ def assign_work(request: schemas.AssignWorkRequest, db: Session = Depends(get_db
                 adj_list.setdefault(adj.zone_id1, []).append(adj.zone_id2)
                 adj_list.setdefault(adj.zone_id2, []).append(adj.zone_id1)
 
-        if not adjacencies or not any(adj_list.values()):
-            for i, zone_id in enumerate(zone_ids):
-                if i > 0:
-                    prev_id = zone_ids[i - 1]
-                    adj_list[zone_id].append(prev_id)
-                    adj_list[prev_id].append(zone_id)
+        if len(zone_ids) > 1 and not any(adj_list.values()):
+            raise HTTPException(
+                status_code=400,
+                detail="Không xác định được quan hệ kề giữa các zone. Hãy kiểm tra geometry của zone.",
+            )
 
         designer = AdvancedTerritoryDesign(zones_data, adj_list)
         result = designer.solve(num_sales=len(sales_ids), algorithm=request.algorithm)
@@ -1633,6 +1677,187 @@ def assign_work(request: schemas.AssignWorkRequest, db: Session = Depends(get_db
         raise HTTPException(status_code=500, detail=f"Lỗi khi chạy thuật toán: {str(e)}")
 
 
+def _zones_and_adjacency(zones_in_territory: List[models.Zone], zone_ids: List[int], db: Session):
+    """zones_data / adj_list in the format of AdvancedTerritoryDesign and algorithm_comparison (read-only)."""
+    zones_data = [
+        {
+            "id": z.id,
+            "code": z.zone_code,
+            "lat": z.center_lat or 21.0285,
+            "lng": z.center_lng or 105.8542,
+            "num_customers": z.num_customers or 0,
+            "num_orders": z.num_orders or 0,
+            "revenue": z.revenue or 0,
+        }
+        for z in zones_in_territory
+    ]
+    adj_list = {zone_id: [] for zone_id in zone_ids}
+    adjacencies = db.query(models.ZoneAdjacency).filter(
+        (models.ZoneAdjacency.zone_id1.in_(zone_ids)) | (models.ZoneAdjacency.zone_id2.in_(zone_ids))
+    ).all()
+    for adj in adjacencies:
+        if adj.is_adjacent:
+            adj_list.setdefault(adj.zone_id1, []).append(adj.zone_id2)
+            adj_list.setdefault(adj.zone_id2, []).append(adj.zone_id1)
+    return zones_data, adj_list
+
+
+def _prepare_assignment_problem(territory_id: int, sales_ids: List[int], date: str, db: Session):
+    """Same checks and data preparation as /admin/assign-work, shared by the comparison endpoint."""
+    territory = db.query(models.Territory).filter(models.Territory.id == territory_id).first()
+    if not territory:
+        raise HTTPException(status_code=404, detail="Phan vung khong ton tai")
+
+    zone_ids = _get_territory_zone_ids(territory, db)
+    zones_in_territory = db.query(models.Zone).filter(
+        models.Zone.id.in_(zone_ids)
+    ).all() if zone_ids else []
+    if not zones_in_territory:
+        raise HTTPException(status_code=400, detail="Phan vung khong co zones nao")
+
+    sales_ids = list(dict.fromkeys([int(sid) for sid in sales_ids]))
+    if not sales_ids:
+        raise HTTPException(status_code=400, detail="Vui long chon sales")
+    if len(sales_ids) > len(zones_in_territory):
+        raise HTTPException(
+            status_code=400,
+            detail="So sales khong duoc lon hon so zones neu moi sales can it nhat 1 zone",
+        )
+
+    selected_sales = db.query(models.User).filter(models.User.id.in_(sales_ids)).all()
+    if len(selected_sales) != len(sales_ids):
+        raise HTTPException(status_code=400, detail="Mot so sales khong ton tai")
+    invalid_sales = [
+        sales.id
+        for sales in selected_sales
+        if sales.role != "sales" or not sales.is_approved or sales.region_id != territory.region_id
+    ]
+    if invalid_sales:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Sales khong thuoc cung khu vuc phan vung: {invalid_sales}",
+        )
+
+    busy_assignments = db.query(models.WorkAssignment).filter(
+        models.WorkAssignment.assignment_date.like(f"{date}%")
+    ).all()
+    busy_sales_ids = {int(sid) for assignment in busy_assignments for sid in assignment.assignment_data.keys()}
+    selected_busy_sales = [sid for sid in sales_ids if sid in busy_sales_ids]
+    if selected_busy_sales:
+        raise HTTPException(status_code=400, detail=f"Sales da ban trong ngay nay: {selected_busy_sales}")
+
+    adjacency_meta = _rebuild_zone_adjacency(territory, db)
+    db.commit()
+
+    zones_data, adj_list = _zones_and_adjacency(zones_in_territory, zone_ids, db)
+    if len(zone_ids) > 1 and not any(adj_list.values()):
+        raise HTTPException(
+            status_code=400,
+            detail="Không xác định được quan hệ kề giữa các zone. Hãy kiểm tra geometry của zone.",
+        )
+    return sales_ids, zones_data, adj_list, adjacency_meta
+
+
+@router.get("/admin/algorithms")
+def list_assignment_algorithms():
+    """Algorithms available for /admin/compare-algorithms, with availability on this server."""
+    return {
+        "algorithms": algorithm_comparison.list_algorithms(),
+        "defaults": {"tolerance": 0.05, "time_limit": 60},
+    }
+
+
+@router.post("/admin/compare-algorithms")
+def compare_assignment_algorithms(request: schemas.CompareAlgorithmsRequest, db: Session = Depends(get_db)):
+    """Run the selected algorithms in parallel on the same territory and sales, and return every result
+    with the same quality metrics so that the admin can compare them and pick one."""
+    names = list(dict.fromkeys(request.algorithms))
+    unknown = [name for name in names if name not in algorithm_comparison.ALGORITHMS]
+    if not names:
+        raise HTTPException(status_code=400, detail="Vui long chon it nhat 1 thuat toan")
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Thuat toan khong ton tai: {unknown}")
+
+    sales_ids, zones_data, adj_list, adjacency_meta = _prepare_assignment_problem(
+        request.territory_id, request.sales_ids, request.date, db
+    )
+    seed = request.seed if request.seed is not None else random.randrange(1, 2 ** 31)
+    problem = algorithm_comparison.build_problem(
+        zones_data, adj_list, len(sales_ids), request.tolerance, request.time_limit, seed
+    )
+    try:
+        reports = algorithm_comparison.compare(problem, names)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Loi khi chay so sanh thuat toan: {str(e)}")
+
+    for report in reports:
+        territories = report.pop("territories")
+        if territories is None:
+            report["assignment"] = None
+            continue
+        report["assignment"] = {str(sales_id): territories[i] for i, sales_id in enumerate(sales_ids)}
+        per_territory = report["metrics"].pop("per_territory")
+        report["metrics"]["per_sales"] = {
+            str(sales_id): per_territory[i] for i, sales_id in enumerate(sales_ids)
+        }
+
+    warnings = []
+    if not any(z["num_customers"] for z in zones_data):
+        warnings.append("Tất cả zone có số khách hàng = 0: chỉ số cân bằng khách hàng không có ý nghĩa.")
+    if not any(z["num_orders"] for z in zones_data):
+        warnings.append("Tất cả zone có số đơn hàng = 0: chỉ số cân bằng đơn hàng không có ý nghĩa.")
+    if not any(z["num_customers"] or z["num_orders"] for z in zones_data):
+        warnings.append("Hãy nhập số liệu hoặc dùng 'Fake dữ liệu' trước khi so sánh; Prob-VNS sẽ cân bằng số zone.")
+
+    return {
+        "territory_id": request.territory_id,
+        "date": request.date,
+        "sales_ids": sales_ids,
+        "zone_count": len(zones_data),
+        "warnings": warnings,
+        "tolerance": request.tolerance,
+        "time_limit": request.time_limit,
+        "seed": seed,
+        "adjacency": adjacency_meta,
+        "results": reports,
+    }
+
+
+@router.post("/admin/evaluate-assignment")
+def evaluate_assignment(request: schemas.EvaluateAssignmentRequest, db: Session = Depends(get_db)):
+    """Recompute the comparison metrics of an assignment {sales_id: [zone_ids]} (e.g. after manual edits).
+    Read-only: uses the stored zone adjacency, does not rebuild it."""
+    territory = db.query(models.Territory).filter(models.Territory.id == request.territory_id).first()
+    if not territory:
+        raise HTTPException(status_code=404, detail="Phan vung khong ton tai")
+    zone_ids = [int(zid) for zid in (territory.zone_ids or [])]
+    zone_ids += [z.id for z in db.query(models.Zone).filter(models.Zone.territory_id == territory.id).all()
+                 if z.id not in zone_ids]
+    if not request.assignment:
+        raise HTTPException(status_code=400, detail="Ket qua phan cong rong")
+
+    sales_keys = list(request.assignment.keys())
+    assigned = [int(zid) for zones in request.assignment.values() for zid in zones]
+    if len(assigned) != len(set(assigned)):
+        raise HTTPException(status_code=400, detail="Moi zone chi duoc giao cho mot sales")
+    unknown = sorted(set(assigned) - set(zone_ids))
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Zone khong thuoc phan vung: {unknown}")
+    unassigned = sorted(set(zone_ids) - set(assigned))
+
+    zones_in_territory = db.query(models.Zone).filter(models.Zone.id.in_(zone_ids)).all()
+    zones_data, adj_list = _zones_and_adjacency(zones_in_territory, zone_ids, db)
+    problem = algorithm_comparison.build_problem(
+        zones_data, adj_list, len(sales_keys), request.tolerance, time_limit=0, seed=0
+    )
+    territories = [[int(zid) for zid in request.assignment[key]] for key in sales_keys]
+    metrics = algorithm_comparison.evaluate(problem, territories)
+    per_territory = metrics.pop("per_territory")
+    metrics["per_sales"] = {key: per_territory[i] for i, key in enumerate(sales_keys)}
+    metrics["unassigned_zones"] = unassigned
+    return {"territory_id": territory.id, "tolerance": request.tolerance, "metrics": metrics}
+
+
 @router.post("/admin/save-assignment")
 def save_assignment(request: schemas.SaveAssignmentRequest, db: Session = Depends(get_db)):
     """
@@ -1714,55 +1939,74 @@ def auto_fetch_wards(request: Dict[str, Any], db: Session = Depends(get_db)):
     if not district_name or not territory_id:
         raise HTTPException(status_code=400, detail="Thiếu thông tin Quận hoặc Phân vùng")
 
-    # 1. Lấy dữ liệu từ OSM
-    raw_data = fetch_wards_from_osm(district_name)
-    if not raw_data:
-        raise HTTPException(status_code=404, detail="Không thể kết nối dịch vụ bản đồ hoặc tên Quận sai")
+    try:
+        territory_id = int(territory_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Mã phân vùng không hợp lệ")
+    territory = db.query(models.Territory).filter(
+        models.Territory.id == int(territory_id)
+    ).first()
+    if not territory:
+        raise HTTPException(status_code=404, detail="Phân vùng không tồn tại hoặc đã bị xóa")
 
-    # 2. Chuyển đổi sang định dạng Zone
-    wards = osm_to_geojson(raw_data)
+    # 1. Lấy dữ liệu từ OSM
+    try:
+        raw_data = fetch_wards_from_osm(district_name, territory.region.name)
+        wards = osm_to_geojson(raw_data)
+    except WardImportError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     if not wards:
         raise HTTPException(status_code=404, detail="Không tìm thấy phường nào thuộc khu vực này")
 
-    # 3. Lưu vào database
-    # 3. Lưu vào database
+    existing_zones = db.query(models.Zone).filter(models.Zone.territory_id == territory.id).all()
+    existing_codes = {z.zone_code for z in existing_zones}
+    skipped_count = 0
     created_count = 0
     created_zone_ids = []
-    for w in wards:
-        # Tạo mã code không trùng
-        zone_code = f"OSM_{int(time.time())}_{created_count}"
-        
-        new_zone = models.Zone(
-            zone_code=zone_code,
-            name=w['name'],
-            territory_id=int(territory_id),
-            geometry=w['geometry'],
-            center_lat=w['center'][1],
-            center_lng=w['center'][0],
-            num_customers=0,
-            num_orders=0,
-            revenue=0.0
-        )
-        db.add(new_zone)
-        db.flush()
-        created_zone_ids.append(new_zone.id)
-        created_count += 1
-            
     try:
+        for w in wards:
+            snapshot_key = "20250601" if raw_data.get("snapshot") else "current"
+            zone_code = f"OSM_{territory.id}_{w['osm_id']}_{snapshot_key}"
+            legacy_duplicate = any(
+                normalize_name(z.name) == normalize_name(w['name'])
+                and z.geometry and shape(z.geometry).equals(shape(w['geometry']))
+                for z in existing_zones
+            )
+            if zone_code in existing_codes or legacy_duplicate:
+                skipped_count += 1
+                continue
+            existing_codes.add(zone_code)
+        
+            new_zone = models.Zone(
+                zone_code=zone_code,
+                name=w['name'],
+                territory_id=int(territory_id),
+                geometry=w['geometry'],
+                center_lat=w['center'][1],
+                center_lng=w['center'][0],
+                num_customers=0,
+                num_orders=0,
+                revenue=0.0
+            )
+            db.add(new_zone)
+            db.flush()
+            created_zone_ids.append(new_zone.id)
+            created_count += 1
+        existing_zone_ids = [int(zid) for zid in (territory.zone_ids or [])]
+        territory.zone_ids = list(dict.fromkeys([*existing_zone_ids, *created_zone_ids]))
         db.commit()
-        territory = db.query(models.Territory).filter(
-            models.Territory.id == int(territory_id)
-        ).first()
-        if territory:
-            existing_zone_ids = [int(zid) for zid in (territory.zone_ids or [])]
-            territory.zone_ids = list(dict.fromkeys([*existing_zone_ids, *created_zone_ids]))
-            db.commit()
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Lỗi lưu DB: {str(e)}")
             
     return {
-        "msg": f"Đã tải thành công {created_count} phường mới vào hệ thống.",
+        "msg": (
+            f"Đã tải {created_count} phường/xã; bỏ qua {skipped_count} đơn vị đã có."
+            + (" Dữ liệu quận/huyện và phường/xã cũ tại ngày 01/06/2025, trước sắp xếp hành chính."
+               if raw_data.get("snapshot") else "")
+        ),
+        "snapshot": raw_data.get("snapshot"),
+        "skipped_count": skipped_count,
         "created_zone_ids": created_zone_ids,
     }
 
@@ -1846,15 +2090,16 @@ def finalize_assignment(request: schemas.SaveAssignmentRequest, db: Session = De
                 status_code=400,
                 detail=f"Moi sales phai co it nhat 1 zone: {empty_sales}",
             )
+        # Vùng không liên thông chỉ bị cảnh báo, không còn bị từ chối.
         disconnected_sales = [
             sales_id
             for sales_id, assigned_zone_ids in request.data.items()
             if not _zone_group_is_connected(assigned_zone_ids, db)
         ]
+        warnings = []
         if disconnected_sales:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Sales co zones khong lien ke nhau: {disconnected_sales}",
+            warnings.append(
+                f"{len(disconnected_sales)} sales có các zone không liền kề nhau: {disconnected_sales}"
             )
 
         existing = db.query(models.WorkAssignment).filter(
@@ -1876,7 +2121,11 @@ def finalize_assignment(request: schemas.SaveAssignmentRequest, db: Session = De
         )
         db.add(new_assign)
         db.commit()
-        return {"msg": "Da luu phan cong thanh cong"}
+        return {
+            "msg": "Da luu phan cong thanh cong",
+            "warnings": warnings,
+            "disconnected_sales": disconnected_sales,
+        }
     except HTTPException:
         raise
     except Exception as e:

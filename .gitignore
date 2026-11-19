@@ -16,3 +16,14 @@ frontend/dev-server*.log
 .env
 .env.*
 !.env.example
+
+# build outputs / tooling
+**/bin/
+**/obj/
+frontend-redesign/build/
+frontend-redesign/build-check/
+.autohand/
+.commandcode/
+.continue/
+.crush/
+skills-lock.json

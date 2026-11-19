@@ -1,0 +1,3 @@
+using SalesMobileApp.Core; using SalesMobileApp.ViewModels;
+namespace SalesMobileApp.Pages;
+public partial class InvoicePage : ContentPage { private readonly InvoiceViewModel _vm; public InvoicePage() { InitializeComponent(); _vm = new(ServiceLocator.Services.GetRequiredService<Services.ApiClient>(), ServiceLocator.Services.GetRequiredService<Services.SessionStore>()); BindingContext = _vm; } protected override async void OnAppearing() { base.OnAppearing(); var id = await ServiceLocator.Services.GetRequiredService<Services.SessionStore>().GetUserIdAsync(); if (id is null) return; try { var shift = await ServiceLocator.Services.GetRequiredService<Services.ApiClient>().GetShiftAsync(id.Value); _vm.SetZones(shift.zones); } catch { } } }
